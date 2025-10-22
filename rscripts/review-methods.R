@@ -410,7 +410,7 @@ func_kmeans_fit = fit_compare(
 )
 
 func_kmeans_fit$metrics_plot
-ggsave("plots/func-k-means-metrics.pdf", width = 7, height = 2)
+ggsave("plots/func-k-means-metrics.pdf", width = 7, height = 4)
 
 func_kmeans_class_matrix = func_kmeans_fit$class_matrix
 func_kmeans_class = func_kmeans_class_matrix[, 1]
