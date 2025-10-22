@@ -468,7 +468,7 @@ rand_df %>%
   ggplot(aes(x=G, y=rand, color=method_2)) + 
   geom_point() + 
   geom_line() + 
-  labs(x="Number of clusters", color="Method", y="Adjusted rand index") + 
+  labs(x="Number of clusters", color="Method", y="Adjusted Rand index") + 
   facet_grid(. ~ method_1) + 
   theme(legend.position = "top")
 
