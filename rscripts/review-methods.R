@@ -7,84 +7,13 @@ library(patchwork)
 library(e1071)
 library(vital)
 library(fda)
-library(funHDDC) # needs manual tar.gz installation 
 library(ggraph)
 library(tidygraph)
 library(igraph)
 library(mclust)
+library(ggdendro)
+source("rscripts/utils.R")
 select = dplyr::select
-
-nb_clust_kmeans = function(data, diss = NULL) {
-  
-  indices = c(
-    "kl", "ch", "hartigan", "ccc", "scott", 
-    "marriot", "trcovw", "tracew", "friedman", 
-    "rubin", "cindex", "db", "silhouette", "duda", 
-    "pseudot2", "beale", "ratkowsky", "ball", 
-    "ptbiserial", "gap", "frey", "mcclain", "gamma", 
-    "gplus", "tau", 
-    "dunn", "hubert", "sdindex", "dindex", "sdbw"
-  )
-  
-  if(is.null(diss)){
-    
-    cluster_fit = lapply(indices, function(index){
-      
-      pdf(NULL) 
-      
-      fit = safely(NbClust, otherwise = NA)(
-        data = data, 
-        method = "kmeans", 
-        index = index, 
-        distance = "euclidean"
-      )
-      
-      dev.off()  
-      
-      par(mfrow=c(1,1))
-      return(fit)
-    })
-    
-  }else{
-    cluster_fit = lapply(indices, function(index){
-      
-      pdf(NULL) 
-      
-      fit = safely(NbClust, otherwise = NA)(
-        data = data, 
-        diss = diss, 
-        method = "kmeans", 
-        index = index, 
-        distance = NULL
-      )
-      
-      dev.off()  
-      
-      return(fit)
-    })
-  }
-  
-  number_cluster = lapply(cluster_fit, function(fit){
-    if(is.null(fit$error)){
-      if(is.null(fit$result$Best.partition)) {
-        return(NA)
-      }else{
-        return(length(unique(fit$result$Best.partition)))
-      }
-    }else{
-      return(NA)
-    }
-  }) %>%
-    do.call(c, .)
-  
-  
-  table_number_cluster = number_cluster %>% table() 
-  opt_n = which.max(table_number_cluster) %>% names() %>% as.numeric()
-  
-  class = cluster_fit[[which(number_cluster == opt_n)[1]]]$result$Best.partition
-  return(class)
-}
-
 
 #### data #### 
 lt = readRDS("data/life_tables_5x1.rds")
@@ -133,9 +62,6 @@ period_map = data.frame(
   period = 1:length(lt$year %>% unique() %>% sort())
 )
 
-period_map
-
-
 ireland_log_mx_plot = lt %>%
   filter(country == "Ireland") %>%
   ggplot(aes(x=age, y=log(mx), color=year, group=year)) + 
@@ -149,7 +75,6 @@ ireland_log_mx_plot = lt %>%
 
 ireland_log_mx_plot
 ggsave("plots/ireland_log_mx.pdf", width = 4.5, height = 3)
-
 
 ireland_dx_plot = lt %>%
   filter(country == "Ireland") %>%
@@ -168,147 +93,173 @@ ggsave("plots/ireland_dx.pdf", width = 5, height = 3)
 ireland_log_mx_plot + ireland_dx_plot
 ggsave("plots/ireland_log_mx_dx.pdf", width = 9, height = 3)
 
-# mx data 
-mx_tidy = lt %>%
-  dplyr::select(country, year, age, mx)
+#### Helling-Ward distance ####
+n = lt$country %>% unique() %>% length()
+time_unique = lt$year %>% unique()
+dH = matrix(0, nrow = n, ncol = n)
 
-mx = mx_tidy %>%
-  spread(age, mx)
-
-mx_matrix = mx %>% dplyr::select(-country, -year) %>% as.matrix()
-
-#### PCA k-medoids ####
-# reference PCA
-X_base = mx_matrix[mx$country == countries_analyzed[1], ] %>% log() %>% scale()
-eigen_decomp_reference = X_base %>% cor() %>% eigen()
-v_base = cbind(eigen_decomp_reference$vectors[, 1])
-PC_base = X_base %*% v_base
-
-# PCA's
-PCA1_list = lapply(countries_analyzed, function(country){
-  X = mx_matrix[mx$country == country, ] %>% log() %>% scale()
-  eigen_decomp = X %>% cor() %>% eigen()
-  v = cbind(eigen_decomp$vectors[, 1])
-  PC = (X %*% v)
-  tr_PC = vegan::procrustes(PC_base, PC, scale = F)
-  new_PC = PC %*% tr_PC$rotation
-  new_v = v %*% tr_PC$rotation
+for(i in seq_along(time_unique)) {
   
-  list(PC1 = new_PC, v = new_v)
-}) 
+  d_time = lt %>%
+    filter(year == time_unique[i]) %>%
+    mutate(dx_norm = dx/100000) %>% #divide by l0 = 100000
+    select(country, age, dx_norm) %>%
+    spread(age, dx_norm) %>%
+    select(-country) %>%
+    as.matrix() %>%
+    sqrt() %>%
+    dist() %>%
+    as.matrix() %>%
+    `/`(sqrt(2))
+  
+  dH = dH + d_time/length(time_unique)
+  
+}
+Dmat = dH
+cl = h_ward_class
+n <- nrow(Dmat)
+D2 <- Dmat^2
 
+# total trace(T)
+trT <- sum(D2) / (2 * n)
 
-PC1 = PCA1_list %>% 
-  lapply(function(PCA){
-    PCA$PC1 %>% t()
-  }) %>%
-  do.call(rbind, .)
-
-DTW_dist = matrix(0, nrow = n_country, ncol = n_country)
-
-for(i in 1:n_country) {
-  for(j in 1:n_country) {
-    dt = dtw::dtw(PC1[, i], PC1[, j])
-    DTW_dist[i, j] = dt$normalizedDistance
+# within trace(W)
+trW <- 0
+for(c in unique(cl)) {
+  idx <- which(cl == c)
+  nc <- length(idx)
+  if(nc > 1) {
+    sub <- D2[idx, idx, drop = FALSE]
+    trW <- trW + sum(sub) / (2 * nc)
   }
+  # if nc==1, contribution 0
 }
 
-PCA_kmedoids_class = nb_clust_kmeans(PC1, DTW_dist)
+trW/trT
 
-p1 = PCA1_list %>% 
-  lapply(function(PCA){
-    PCA$v %>% t()
-  }) %>%
-  do.call(rbind, .) %>%
+colnames(dH) = rownames(dH) = lt$country %>% unique()
+dH = as.dist(dH)
+
+ward_fit = hclust(dH, method = "ward.D")
+ggdendrogram(ward_fit)
+ggsave("plots/dendro.pdf", width = 6, height = 3)
+
+h_ward_fit = fit_compare(
+  diss = dH, G = 2:10, seed = 1, method = "ward"
+)
+
+h_ward_fit$metrics_plot
+ggsave("plots/h-ward-metrics.pdf", width = 7, height = 4)
+
+h_ward_class_matrix = h_ward_fit$class_matrix
+h_ward_class = h_ward_class_matrix[, 2]
+
+lt %>%
+  mutate(dx_norm = sqrt(dx/100000)) %>%
+  select(country, year, age, dx_norm) %>%
+  mutate(id = paste0(country, "-", year)) %>%
+  mutate(class = h_ward_class[country]) %>%
+  as_tibble() %>%
+  group_by(class, age) %>%
+  summarise(med = median(dx_norm),
+            li = quantile(dx_norm, 0.025),
+            ui = quantile(dx_norm, 0.975)) %>%
+  ggplot(aes(x=age, y=med, color=factor(class))) + 
+  geom_line(linewidth = 1) + 
+  geom_ribbon(aes(x=age, ymin = li, ymax=ui, fill=factor(class)), 
+              inherit.aes = F, alpha = 0.2) + 
+  labs(x="Age group", y=latex2exp::TeX("Median $d_{x i}^{*}$"), 
+       fill = "Cluster", color = "Cluster")
+
+ggsave("plots/dx-curve-cluster.pdf", width = 5, height = 3)
+
+#### ILC-k-means ####
+ILC = lapply(countries_analyzed, function(country_name){
+  fit = mx_tidy %>%
+    filter(country == country_name) %>%
+    dplyr::select(year, age, mx) %>%
+    dplyr::arrange(age, year) %>%
+    as_tibble() %>%
+    as_vital(index = year, key = age, .age = "age") %>%
+    model(lee_carter = LC(log(mx), scale = T)) 
+  
+  list(kt = fit %>% time_components() %>% .$kt, 
+       bx = fit %>% age_components() %>% .$bx)
+})
+
+kappa_t = ILC %>% purrr::map(~{.x$kt}) %>% do.call(rbind, .) 
+beta_x = ILC %>% purrr::map(~{.x$bx}) %>% do.call(rbind, .)
+
+ILC_k_means_fit = fit_compare(
+  data = beta_x, 
+  diss = dist(beta_x), 
+  G = 2:10, 
+  n_start = 100, 
+  n_iters = 1000, 
+  method = "kmeans",
+  seed = 1
+)
+
+ILC_k_means_fit$metrics_plot
+ggsave("plots/ILC-kmeans-metrics.pdf", width = 7, height = 4)
+
+ILC_kmeans_class_matrix = ILC_k_means_fit$class_matrix
+ILC_kmeans_class = ILC_kmeans_class_matrix[, 1]
+
+beta_x %>%
   as.data.frame() %>%
-  mutate(country = countries_analyzed, class = factor(PCA_kmedoids_class)) %>%
-  gather(age_group, eigenvec, -country, -class) %>%
+  mutate(country = countries_analyzed, class = factor(ILC_kmeans_class)) %>%
+  gather(age_group, bx, -country, -class) %>%
+  as_tibble() %>%
   mutate(age_group = age_group %>% str_extract("\\d{1,10}") %>% as.numeric()) %>%
   left_join(age_map, by = "age_group") %>%
-  ggplot(aes(x=age_group_label, y=eigenvec, group=country, color=class)) + 
+  ggplot(aes(x=age_group_label, y=bx, group=country, color=class)) + 
   geom_line() + 
-  geom_point() + 
-  guides(color="none") + 
-  labs(x="Age group", y="Eigenvector value", color="Cluster") + 
-  theme(text = element_text(size = 15))
+  labs(x="Age group", y=latex2exp::TeX("$\\beta_{x i}$"), color="Cluster")
 
-p2 = PC1 %>%
+ggsave("plots/ILC-k-means-beta.pdf", width = 5, height = 3) 
+
+kappa_t %>%
   as.data.frame() %>%
-  mutate(country = countries_analyzed, class = factor(PCA_kmedoids_class)) %>%
-  gather(period, pc1, -country, -class) %>%
+  mutate(country = countries_analyzed, class = factor(ILC_kmeans_class)) %>%
+  gather(period, kappa, -country, -class) %>%
+  as_tibble() %>%
   mutate(period = period %>% str_extract("\\d{1,10}") %>% as.numeric()) %>%
-  left_join(period_map, by = "period") %>%
-  ggplot(aes(x=period_label, y=pc1, group=country, color=class)) + 
+  left_join(period_map, by = c("period")) %>%
+  ggplot(aes(x=period_label, y=kappa, group=country, color=class)) + 
   geom_line() + 
-  labs(x="Period", y="PC1", color="Cluster") + 
-  theme(text = element_text(size = 15))
+  labs(x="Period", y=expression(kappa[t]), color="Cluster") + 
+  theme(text = element_text(size = 10))
 
-p1
-ggsave("plots/pca-k-medoids-eigenvec.pdf", width = 5, height = 3)
+ggsave("plots/ILC-k-means-kappa.pdf", width = 5, height = 3) 
 
-p2
-ggsave("plots/pca-k-medoids-scores.pdf", width = 5, height = 3)
-
-
-p1 + p2 
-ggsave("plots/pca-k-medoids.pdf", width = 10, height = 3)
-
-mx_pca =  mx_tidy %>%
+mx_ilc =  mx_tidy %>%
   as_tibble() %>%
   left_join(
     data.frame(
       country = countries_analyzed, 
-      class = factor(PCA_kmedoids_class)
+      class = factor(ILC_k_means_class)
     ),
     by = "country"
   ) %>% 
   mutate(class = paste0("Cluster ", class)) 
 
-mx_pca %>%
-  group_by(year, class, age) %>%
-  summarise(mx = mean(log(mx))) %>%
-  mutate(id = paste0(year, "-", class)) %>%
-  ggplot(aes(x=age, y=(mx), color=year, group=id)) + 
-  geom_line(alpha = 0.8) + 
-  facet_grid(. ~ class) + 
-  scale_color_viridis() + 
-  labs(x = "Age group", y=latex2exp::TeX("Average $\\log$ ${}_{5}m_{x}$")) + 
-  theme(text = element_text(size = 17))
-
-ggsave("plots/mx-pca-k-medoids.pdf", width = 10, height = 3)
-
-
-PCA1_list %>% 
-  lapply(function(PCA){
-    PCA$v %>% t()
-  }) %>%
-  do.call(rbind, .) %>%
-  as.data.frame() %>%
-  mutate(country = countries_analyzed, class = factor(PCA_kmedoids_class)) %>%
-  gather(age_group, eigenvec, -country, -class) %>%
-  mutate(age_group = age_group %>% str_extract("\\d{1,10}") %>% as.numeric()) %>%
-  left_join(age_map, by = "age_group") %>%
-  group_by(age_group_label) %>%
-  summarise(cv = sd(eigenvec)/abs(mean(eigenvec))) %>%
-  arrange(desc(cv)) %>%
-  View()
-
-
-mx_pca %>%
+mx_ilc %>%
   group_by(year, class, age) %>%
   summarise(mx = mean(log(mx))) %>%
   filter(age %in% c(0, 15, 45, 80)) %>%
-  mutate(age = ifelse(age == 0, paste0("Age group [0, 1)"), paste0("Age group [", age, ", ", age + 5, ")"))) %>%
+  mutate(age = ifelse(age == 0, paste0("Age group [0, 1)"), 
+                      paste0("Age group [", age, ", ", age + 5, ")"))) %>%
+  mutate(class = class %>% str_remove("Cluster ")) %>%
   ggplot(aes(x=year, y=(mx), color=class)) + 
   geom_line(alpha = 0.8) + 
   facet_wrap(. ~ age, scales = "free") + 
   #scale_color_viridis() + 
-  labs(x = "Period", y=latex2exp::TeX("Average $\\log$ ${}_{5}m_{x}$"),
-       color = "Class") + 
+  labs(x = "Period", y=latex2exp::TeX("Average $\\log({}_{5}m_{x})$"),
+       color = "Cluster") + 
   theme(text = element_text(size = 17))
 
-ggsave("plots/time-mx-pca-k-medoids.pdf", width = 10, height = 5)
-
+ggsave("plots/time-ILC-k-means.pdf", width = 10, height = 5)
 
 #### PCA fuzzy method ####
 qx_tidy = lt %>%
@@ -328,17 +279,28 @@ logitqx = qx_tidy %>%
 qx_matrix = logitqx %>% dplyr::select(-country) %>% as.matrix() %>% scale()
 dim(qx_matrix)
 
+set.seed(1)
 qx_eigen_dec = qx_matrix %>% cor() %>% eigen()
 lambda_cumsum = cumsum(qx_eigen_dec$values)/sum((qx_eigen_dec$values))
-n = length(lambda_cumsum[lambda_cumsum < 0.9]) + 1
+n_dim = length(lambda_cumsum[lambda_cumsum < 0.9]) + 1
 
-qxPCS = qx_matrix %*% qx_eigen_dec$vectors[, 1:n]
+qxPCS = qx_matrix %*% qx_eigen_dec$vectors[, 1:n_dim]
 dim(qxPCS)
 
+PCA_fuzzy_fit = lapply(2:10, function(g){
+  set.seed(1)
+  cmeans(qxPCS, centers = g, m = 2)
+})
+
+PCA_fuzzy_class_matrix = lapply(PCA_fuzzy_fit, function(fit){
+  fit$cluster
+}) %>%
+  do.call(cbind, .)
 
 # metrics 
 metrics = lapply(2:10, function(k){
-  fcm_result = cmeans(qxPCS, centers = k, m = 2)
+  
+  fcm_result = PCA_fuzzy_fit[[k-1]]
   
   sil = cluster::silhouette(fcm_result$cluster, dist(qxPCS), FUN = mean)
   avg_sil = mean(sil[, 3])
@@ -353,15 +315,11 @@ metrics = lapply(2:10, function(k){
   
   global_mean = colMeans(qxPCS)
   
-  compactness = sum(fcm_result$membership^2 * rowSums((qxPCS - fcm_result$centers[fcm_result$cluster, ])^2))
-  separation = sum(fcm_result$membership^2 * rowSums((fcm_result$centers - global_mean)^2))
-  fukuyama_sugeno = compactness - separation
+
   c(
     "sil" = avg_sil, 
     "PC" = partition_coefficient,
-    #"PE" = -partition_entropy, 
     "xie_beni" = xie_beni 
-    #"FS" = fukuyama_sugeno
   )
   
 }) %>%
@@ -372,19 +330,26 @@ metrics = lapply(2:10, function(k){
 metrics %>%
   gather(metric, val, -K) %>%
   mutate(metric = ifelse(metric == "xie_beni", "Xie-Beni", metric),
-         metric = ifelse(metric == "sil", "silhouette", metric)) %>%
+         metric = ifelse(metric == "sil", "Silhouette", metric)) %>%
   ggplot(aes(x=K, y=val)) + 
   geom_point() + 
   geom_line() + 
   facet_wrap(. ~ metric, scales = "free") + 
   scale_x_continuous(breaks = 2:10) + 
-  labs(x="Number of clusters", y="Metric value") + 
+  labs(x="Number of clusters", y="Metric") + 
   theme(text = element_text(size = 15))
 
-ggsave("plots/fuzzy-metrics.pdf", height = 3, width = 10)
+ggsave("plots/PCA-fuzzy-metrics.pdf", height = 3, width = 10)
 
-set.seed(1)
-PCA_fuzzy_class = cmeans(qxPCS, centers = 4, m = 2)$cluster
+PCA_fuzzy_class = PCA_fuzzy_class_matrix[, 3]
+
+mb_class = PCA_fuzzy_fit[[3]]$membership
+rownames(mb_class) = logitqx$country
+lev = mb_class %>% apply(MARGIN = 1, FUN = max) %>% round(2)
+lapply(1:4, function(g){
+  lev[PCA_fuzzy_class == g]
+  
+}) 
 
 qx_fuzzy =  qx_tidy %>%
   as_tibble() %>%
@@ -400,172 +365,18 @@ qx_fuzzy =  qx_tidy %>%
 qx_fuzzy %>%
   group_by(year, class, age) %>%
   summarise(qx = mean(log(qx/(1-qx)))) %>%
-  mutate(id = paste0(year, "-", class)) %>%
-  ggplot(aes(x=age, y=qx, color=year, group=id)) + 
-  geom_line(alpha = 0.8) + 
-  facet_wrap(. ~ class, ncol = 2) + 
-  scale_color_viridis() + 
-  labs(x = "Age group", y=latex2exp::TeX("Average logit ${}_{5}q_{x}$")) + 
-  theme(text = element_text(size = 15))
-
-ggsave("plots/qx-fuzzy.pdf", width = 8, height = 5)
-
-qx_fuzzy %>%
-  group_by(year, class, age) %>%
-  summarise(qx = mean(log(qx/(1-qx)))) %>%
   filter(age %in% c(0, 15, 45, 80)) %>%
   mutate(age = ifelse(age == 0, paste0("Age group [0, 1)"), paste0("Age group [", age, ", ", age + 5, ")"))) %>%
+  mutate(class = class %>% str_remove("Cluster ")) %>%
   ggplot(aes(x=year, y=qx, color=class)) + 
   geom_line(alpha = 0.8) + 
   facet_wrap(. ~ age, scales = "free") + 
   #scale_color_viridis() + 
-  labs(x = "Period", y=latex2exp::TeX("Average logit ${}_{5}q_{x}$"),
-       color = "Class") + 
+  labs(x = "Period", y=latex2exp::TeX("Average logit(${}_{5}q_{x}$)"),
+       color = "Cluster") + 
   theme(text = element_text(size = 17))
 
 ggsave("plots/time-qx-fuzzy.pdf", width = 10, height = 5)
-
-#### ILC-k-means ####
-ILC = lapply(countries_analyzed, function(country_name){
-  fit = mx_tidy %>%
-    filter(country == country_name) %>%
-    dplyr::select(year, age, mx) %>%
-    dplyr::arrange(age, year) %>%
-    as_tibble() %>%
-    as_vital(index = year, key = age, .age = "age") %>%
-    model(lee_carter = LC(log(mx), scale = T)) 
-  
-  list(kt = fit %>% time_components() %>% .$kt, 
-       bx = fit %>% age_components() %>% .$bx)
-})
-
-kappa_t = ILC %>% purrr::map(~{.x$kt}) %>% do.call(rbind, .)
-beta_x = ILC %>% purrr::map(~{.x$bx}) %>% do.call(rbind, .)
-
-##### kmeans #####
-ILC_k_means_class = nb_clust_kmeans(beta_x)
-
-p1 = kappa_t %>%
-  as.data.frame() %>%
-  mutate(country = countries_analyzed, class = factor(ILC_k_means_class)) %>%
-  gather(period, kappa, -country, -class) %>%
-  as_tibble() %>%
-  mutate(period = period %>% str_extract("\\d{1,10}") %>% as.numeric()) %>%
-  left_join(period_map, by = c("period")) %>%
-  ggplot(aes(x=period_label, y=kappa, group=country, color=class)) + 
-  geom_line() + 
-  labs(x="Period", y=expression(kappa[t]), color="Cluster") + 
-  theme(text = element_text(size = 15))
-
-
-p2 = beta_x %>%
-  as.data.frame() %>%
-  mutate(country = countries_analyzed, class = factor(ILC_k_means_class)) %>%
-  gather(age_group, bx, -country, -class) %>%
-  as_tibble() %>%
-  mutate(age_group = age_group %>% str_extract("\\d{1,10}") %>% as.numeric()) %>%
-  left_join(age_map, by = "age_group") %>%
-  ggplot(aes(x=age_group_label, y=bx, group=country, color=class)) + 
-  geom_line() + 
-  guides(color="none") + 
-  labs(x="Age group", y=expression(beta[x]), color="Cluster") + 
-  theme(text = element_text(size = 15))
-
-p1 + p2
-
-p2
-ggsave("plots/ILC-k-means-beta.pdf", width = 5, height = 3) 
-
-p1
-ggsave("plots/ILC-k-means-kappa.pdf", width = 5, height = 3) 
-
-
-p2 + p1
-ggsave("plots/ILC-k-means.pdf", width = 10, height = 3) 
-
-mx_ilc =  mx_tidy %>%
-  as_tibble() %>%
-  left_join(
-    data.frame(
-      country = countries_analyzed, 
-      class = factor(ILC_k_means_class)
-    ),
-    by = "country"
-  ) %>% 
-  mutate(class = paste0("Cluster ", class)) 
-
-
-mx_ilc %>%
-  group_by(year, class, age) %>%
-  summarise(mx = mean(log(mx))) %>%
-  mutate(id = paste0(year, "-", class)) %>%
-  ggplot(aes(x=age, y=(mx), color=year, group=id)) + 
-  geom_line(alpha = 0.8) + 
-  facet_grid(. ~ class) + 
-  scale_color_viridis() + 
-  labs(x = "Age group", y=latex2exp::TeX("Average $\\log$ ${}_{5}m_{x}$")) + 
-  theme(text = element_text(size = 17))
-
-ggsave("plots/mx-ILC-k-means.pdf", width = 8, height = 3)
-
-beta_x %>%
-  as.data.frame() %>%
-  mutate(country = countries_analyzed, class = factor(ILC_k_means_class)) %>%
-  gather(age_group, bx, -country, -class) %>%
-  as_tibble() %>%
-  mutate(age_group = age_group %>% str_extract("\\d{1,10}") %>% as.numeric()) %>%
-  left_join(age_map, by = "age_group") %>%
-  group_by(age_group_label) %>%
-  summarise(cv = sd(bx)/abs(mean(bx))) %>%
-  arrange(desc(cv)) %>%
-  View()
-
-mx_ilc %>%
-  group_by(year, class, age) %>%
-  summarise(mx = mean(log(mx))) %>%
-  filter(age %in% c(0, 15, 45, 80)) %>%
-  mutate(age = ifelse(age == 0, paste0("Age group [0, 1)"), paste0("Age group [", age, ", ", age + 5, ")"))) %>%
-  ggplot(aes(x=year, y=(mx), color=class)) + 
-  geom_line(alpha = 0.8) + 
-  facet_wrap(. ~ age, scales = "free") + 
-  #scale_color_viridis() + 
-  labs(x = "Period", y=latex2exp::TeX("Average $\\log$ ${}_{5}m_{x}$"),
-       color = "Class") + 
-  theme(text = element_text(size = 17))
-
-ggsave("plots/time-ILC-k-means.pdf", width = 10, height = 5)
-
-##### functional model-based ####
-basis = create.bspline.basis(rangeval = range(mx_tidy$age), 
-                             nbasis = 23,  
-                             norder = 3)
-
-md_fd_obj = smooth.basis(argvals = mx_tidy$age %>% unique(), 
-                         y = t(beta_x), 
-                         fdParobj = basis)$fd
-
-mdfda = funHDDC(md_fd_obj, K = c(2:10))
-
-func_model_based_class = mdfda$class
-ILC_k_means_class
-
-mclust::adjustedRandIndex(
-  ILC_k_means_class, 
-  func_model_based_class
-)
-
-beta_x %>%
-  as.data.frame() %>%
-  mutate(country = countries_analyzed, class = factor(func_model_based_class)) %>%
-  gather(age_group, bx, -country, -class) %>%
-  as_tibble() %>%
-  mutate(age_group = age_group %>% str_extract("\\d{1,10}") %>% as.numeric()) %>%
-  left_join(age_map, by = "age_group") %>%
-  ggplot(aes(x=age_group_label, y=bx, group=country, color=class)) + 
-  geom_line() + 
-  guides(color="none") + 
-  labs(x="Age group", y=expression(beta[x]), color="Cluster") + 
-  theme(text = element_text(size = 15))
 
 #### Func-k-means ####
 ex_tidy = lt %>% dplyr::select(country, year, age, ex)
@@ -577,101 +388,103 @@ ex_0 = ex %>%
 
 years = lt$year %>% unique()
 basis = create.bspline.basis(rangeval = period_range, 
-                             nbasis = diff(period_range) + 1,  
+                             nbasis = 25,  
                              norder = 3)
 
-fd_coefs = lapply(countries_analyzed, function(country_name){
-  ex_vec = ex_0 %>%
-    filter(country == country_name) %>%
-    dplyr::select(-country) %>%
-    unlist() 
-  
-  fd_obj = smooth.basis(argvals = years, 
-                        y = ex_vec, 
-                        fdParobj = basis)
-  fd_obj$fd$coefs %>% as.numeric()
-  
-}) %>% do.call(rbind, .) %>%
-  scale()
+md_fd_obj = smooth.basis(
+  argvals = years, 
+  y = t(ex_0_matrix), 
+  fdParobj = basis
+)
 
-func_k_means_class = nb_clust_kmeans(fd_coefs)
+plot(md_fd_obj)
+set.seed(1)
+func_kmeans_fit = fit_compare(
+  data = t(md_fd_obj$fd$coefs), 
+  diss = dist(t(md_fd_obj$fd$coefs)), 
+  G = 2:10, 
+  n_start = 100, 
+  n_iters = 1000, 
+  method = "kmeans", 
+  seed = 1
+)
 
-p1 = ex_0 %>%
-  mutate(class = factor(func_k_means_class)) %>%
-  gather(time, e0, -country, -class) %>%
-  as_tibble() %>%
-  mutate(time = time %>% str_extract("\\d{1,10}") %>% as.numeric()) %>%
-  ggplot(aes(x=time, y=e0, group=country, color=class)) + 
-  geom_line() + 
-  labs(x="Period", y=expression(e[0]), color="Clusters for Func-k-means")  + 
-  theme(text = element_text(size = 13), legend.position = "top")
+func_kmeans_fit$metrics_plot
+ggsave("plots/func-k-means-metrics.pdf", width = 7, height = 2)
 
-#### Func-model-based ####
-ex_0_matrix = ex_0 %>% dplyr::select(-country) %>% as.matrix() 
-
-md_fd_obj = smooth.basis(argvals = years, 
-                         y = t(ex_0_matrix), 
-                         fdParobj = basis)$fd
-
-mdfda = funHDDC(md_fd_obj, K = c(2:10))
-
-func_model_based_class = mdfda$class
-
-p2 = ex_0 %>%
-  mutate(class = factor(func_model_based_class)) %>%
-  gather(time, e0, -country, -class) %>%
-  as_tibble() %>%
-  mutate(time = time %>% str_extract("\\d{1,10}") %>% as.numeric()) %>%
-  mutate(class = factor(class, levels = c(2, 1), labels = c("1", "2"))) %>%
-  ggplot(aes(x=time, y=e0, group=country, color=class)) + 
-  geom_line() + 
-  labs(x="Period", y=expression(e[0]), color="Clusters for Func-model-based")  + 
-  theme(text = element_text(size = 13), legend.position = "top")
-
-p1
-ggsave("plots/func-k-means.pdf", width = 5, height = 3.5) 
-
-p2
-ggsave("plots/func-model-based.pdf", width = 5, height = 3.5) 
-
-
-p1 + p2
-ggsave("plots/func-methods.pdf", width = 9, height = 3.5) 
-
+func_kmeans_class_matrix = func_kmeans_fit$class_matrix
+func_kmeans_class = func_kmeans_class_matrix[, 1]
 
 ex_0 %>%
-  mutate(class = factor(func_model_based_class)) %>%
+  mutate(class = factor(func_kmeans_class)) %>%
   gather(time, e0, -country, -class) %>%
   as_tibble() %>%
-  filter(time == 2010) %>%
-  filter(class == 1) %>%
-  arrange(desc(e0))
+  mutate(time = time %>% str_extract("\\d{1,10}") %>% as.numeric()) %>%
+  ggplot(aes(x=time, y=e0, group=country, color=class)) + 
+  geom_line() + 
+  labs(x="Period", y=expression(e[0]), color="Cluster")  + 
+  theme(text = element_text(size = 13))
+
+ggsave("plots/func-methods-single.pdf", width = 6, height = 3.5) 
+
 
 #### class analysis ####
+class_matrix_list = list(
+  "Hellinger-Ward" = h_ward_class_matrix,
+  "ILC-k-means" = ILC_kmeans_class_matrix,
+  "PCA-fuzzy" = PCA_fuzzy_class_matrix, 
+  "func-k-means" = func_kmeans_class_matrix
+)
+
+
+methods = names(class_matrix_list)
+rand_df = data.frame(
+  method_1 = NULL, method_2 = NULL, G = NULL, rand = NULL
+)
+
+for(method_1 in methods) {
+  for(method_2 in methods) {
+    for(g in 2:10) {
+      rand = mclust::adjustedRandIndex(
+        class_matrix_list[[method_1]][, g-1], 
+        class_matrix_list[[method_2]][, g-1]
+      )
+      
+      rand_df = bind_rows(
+        rand_df, 
+        data.frame(
+          method_1 = method_1, method_2 = method_2, G = g, rand = rand
+        )
+      )
+    }
+  }
+}
+
+rand_df
+
+rand_df %>%
+  filter(method_1 != method_2) %>%
+  filter(G <= 5) %>%
+  ggplot(aes(x=G, y=rand, color=method_2)) + 
+  geom_point() + 
+  geom_line() + 
+  labs(x="Number of clusters", color="Method", y="Adjusted rand index") + 
+  facet_grid(. ~ method_1) + 
+  theme(legend.position = "top")
+
+ggsave("plots/rand-index.pdf", width = 7, height = 4)
+
 class_df = data.frame(
   country = countries_analyzed, 
-  PCA_fuzzy_class, 
+  hell_ward_class,
   ILC_k_means_class, 
-  func_k_means_class, 
+  PCA_fuzzy_class,
   func_model_based_class
 )
 
 class_df %>% 
   xtable::xtable() %>%
   print(include.rownames = F)
-
-class_df %>%
-  filter(func_k_means_class == 2 & func_model_based_class == 1)
-
-class_df %>%
-  filter(func_k_means_class == 2 & func_model_based_class == 2)
-
-class_df %>%
-  filter(func_k_means_class == 1 & func_model_based_class == 1)
-
-class_df %>%
-  filter(func_k_means_class == 1 & func_model_based_class == 2)
-
 
 match_matrix = matrix(0, n_country, n_country)
 rownames(match_matrix) = colnames(match_matrix) = class_df$country
@@ -702,14 +515,62 @@ country_conn = country_conn %>%
 country_graph = graph_from_data_frame(country_conn, directed = FALSE)
 country_tbl_graph = as_tbl_graph(country_graph)
 
-
-set.seed(1)
+set.seed(3)
 ggraph(country_tbl_graph, layout = "fr") +  # Fruchterman-Reingold layout
-  geom_edge_link(aes(alpha = weight), color = "grey60") +  
+  geom_edge_link(aes(alpha = weight), color = "grey60", show.legend = TRUE) +  
   geom_node_point() + 
   geom_node_text(aes(label = name), repel = TRUE, family = "serif") + 
-  labs(alpha = "aa") + 
+  scale_edge_alpha(name = "Weight") + 
   theme_graph()
 
 ggsave("plots/review-country-graph.pdf", width = 5, height = 5)
+
+
+data = beta_x
+diss = dist(beta_x)
+G = 2:10
+n_start = 100
+n_iters = 1000
+method = "kmeans"
+
+
+
+
+
+
+
+clusterCrit::intCriteria(
+  traj = data, 
+  part = z, 
+  crit = c("Tau", "Ratkowsky_Lance", "Ball_Hall")
+)
+
+
+z = class_matrix[, 1]
+fpc_stats = fpc::cluster.stats(d = diss, clustering = z, silhouette = T)
+
+cluster::clusGap()
+fpc_stats[[c("avg.silwidth", "dunn", "avg.silwidth")]]
+clusterSim::index.KL(x = data, clall = class_matrix, centrotypes = "centroids")
+clusterSim::index.H(x = data, clall = class_matrix, centrotypes = "centroids")
+
+
+indices = c(
+  "kl", "ch", "hartigan", "ccc", "scott", 
+  "marriot", "trcovw", "tracew", "friedman", 
+  "rubin", "cindex", "db", "silhouette", "duda", 
+  "pseudot2", "beale", "ratkowsky", "ball", 
+  "ptbiserial", "gap", "frey", "mcclain", "gamma", "gplus", "tau", 
+  "dunn", "hubert", "sdindex", "dindex", "sdbw"
+)
+
+
+
+
+
+
+
+
+
+
 
