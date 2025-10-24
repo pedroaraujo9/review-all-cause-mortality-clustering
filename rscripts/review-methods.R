@@ -301,9 +301,10 @@ PCA_fuzzy_class_matrix = lapply(PCA_fuzzy_fit, function(fit){
 metrics = lapply(2:10, function(k){
   
   fcm_result = PCA_fuzzy_fit[[k-1]]
+  sil = fclust::SIL.F(Xca = qxPCS, U = fcm_result$membership, alpha = 2)
   
-  sil = cluster::silhouette(fcm_result$cluster, dist(qxPCS), FUN = mean)
-  avg_sil = mean(sil[, 3])
+  #sil = cluster::silhouette(fcm_result$cluster, dist(qxPCS), FUN = mean)
+  #avg_sil = mean(sil[, 3])
   
   partition_coefficient = sum(fcm_result$membership^2) / nrow(qxPCS)
   partition_entropy = -sum(fcm_result$membership * log(fcm_result$membership)) / nrow(qxPCS)
@@ -317,7 +318,7 @@ metrics = lapply(2:10, function(k){
   
 
   c(
-    "sil" = avg_sil, 
+    "sil" = sil, 
     "PC" = partition_coefficient,
     "xie_beni" = xie_beni 
   )
@@ -330,7 +331,7 @@ metrics = lapply(2:10, function(k){
 metrics %>%
   gather(metric, val, -K) %>%
   mutate(metric = ifelse(metric == "xie_beni", "Xie-Beni", metric),
-         metric = ifelse(metric == "sil", "Silhouette", metric)) %>%
+         metric = ifelse(metric == "sil", "Fuzzy silhouette", metric)) %>%
   ggplot(aes(x=K, y=val)) + 
   geom_point() + 
   geom_line() + 
