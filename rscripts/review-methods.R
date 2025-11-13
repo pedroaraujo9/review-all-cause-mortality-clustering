@@ -93,6 +93,10 @@ ggsave("plots/ireland_dx.pdf", width = 5, height = 3)
 ireland_log_mx_plot + ireland_dx_plot
 ggsave("plots/ireland_log_mx_dx.pdf", width = 9, height = 3)
 
+mx_tidy = lt %>% dplyr::select(country, year, age, mx)
+mx = mx_tidy %>% spread(age, mx)
+mx_matrix = mx %>% dplyr::select(-country, -year) %>% as.matrix()
+
 #### Helling-Ward distance ####
 n = lt$country %>% unique() %>% length()
 time_unique = lt$year %>% unique()
@@ -115,27 +119,6 @@ for(i in seq_along(time_unique)) {
   dH = dH + d_time/length(time_unique)
   
 }
-Dmat = dH
-cl = h_ward_class
-n <- nrow(Dmat)
-D2 <- Dmat^2
-
-# total trace(T)
-trT <- sum(D2) / (2 * n)
-
-# within trace(W)
-trW <- 0
-for(c in unique(cl)) {
-  idx <- which(cl == c)
-  nc <- length(idx)
-  if(nc > 1) {
-    sub <- D2[idx, idx, drop = FALSE]
-    trW <- trW + sum(sub) / (2 * nc)
-  }
-  # if nc==1, contribution 0
-}
-
-trW/trT
 
 colnames(dH) = rownames(dH) = lt$country %>% unique()
 dH = as.dist(dH)
@@ -149,10 +132,10 @@ h_ward_fit = fit_compare(
 )
 
 h_ward_fit$metrics_plot
-ggsave("plots/h-ward-metrics.pdf", width = 7, height = 4)
+ggsave("plots/h-ward-metrics.pdf", width = 8, height = 3)
 
 h_ward_class_matrix = h_ward_fit$class_matrix
-h_ward_class = h_ward_class_matrix[, 2]
+h_ward_class = h_ward_class_matrix[, 1]
 
 lt %>%
   mutate(dx_norm = sqrt(dx/100000)) %>%
@@ -201,10 +184,10 @@ ILC_k_means_fit = fit_compare(
 )
 
 ILC_k_means_fit$metrics_plot
-ggsave("plots/ILC-kmeans-metrics.pdf", width = 7, height = 4)
+ggsave("plots/ILC-kmeans-metrics.pdf", width = 8, height = 3)
 
 ILC_kmeans_class_matrix = ILC_k_means_fit$class_matrix
-ILC_kmeans_class = ILC_kmeans_class_matrix[, 1]
+ILC_kmeans_class = ifelse(ILC_kmeans_class_matrix[, 1] == 1, 2, 1)
 
 beta_x %>%
   as.data.frame() %>%
@@ -215,7 +198,8 @@ beta_x %>%
   left_join(age_map, by = "age_group") %>%
   ggplot(aes(x=age_group_label, y=bx, group=country, color=class)) + 
   geom_line() + 
-  labs(x="Age group", y=latex2exp::TeX("$\\beta_{x i}$"), color="Cluster")
+  labs(x="Age group", y=latex2exp::TeX("$\\beta_{x i}$"), color="Cluster") + 
+  geom_hline(yintercept = 0, linetype = "dashed") 
 
 ggsave("plots/ILC-k-means-beta.pdf", width = 5, height = 3) 
 
@@ -238,7 +222,7 @@ mx_ilc =  mx_tidy %>%
   left_join(
     data.frame(
       country = countries_analyzed, 
-      class = factor(ILC_k_means_class)
+      class = factor(ILC_kmeans_class)
     ),
     by = "country"
   ) %>% 
@@ -301,10 +285,9 @@ PCA_fuzzy_class_matrix = lapply(PCA_fuzzy_fit, function(fit){
 metrics = lapply(2:10, function(k){
   
   fcm_result = PCA_fuzzy_fit[[k-1]]
-  sil = fclust::SIL.F(Xca = qxPCS, U = fcm_result$membership, alpha = 2)
   
-  #sil = cluster::silhouette(fcm_result$cluster, dist(qxPCS), FUN = mean)
-  #avg_sil = mean(sil[, 3])
+  sil = cluster::silhouette(fcm_result$cluster, dist(qxPCS), FUN = mean)
+  avg_sil = mean(sil[, 3])
   
   partition_coefficient = sum(fcm_result$membership^2) / nrow(qxPCS)
   partition_entropy = -sum(fcm_result$membership * log(fcm_result$membership)) / nrow(qxPCS)
@@ -316,9 +299,9 @@ metrics = lapply(2:10, function(k){
   
   global_mean = colMeans(qxPCS)
   
-
+  
   c(
-    "sil" = sil, 
+    "sil" = avg_sil, 
     "PC" = partition_coefficient,
     "xie_beni" = xie_beni 
   )
@@ -331,26 +314,46 @@ metrics = lapply(2:10, function(k){
 metrics %>%
   gather(metric, val, -K) %>%
   mutate(metric = ifelse(metric == "xie_beni", "Xie-Beni", metric),
-         metric = ifelse(metric == "sil", "Fuzzy silhouette", metric)) %>%
+         metric = ifelse(metric == "sil", "Silhouette", metric)) %>%
   ggplot(aes(x=K, y=val)) + 
   geom_point() + 
   geom_line() + 
   facet_wrap(. ~ metric, scales = "free") + 
   scale_x_continuous(breaks = 2:10) + 
-  labs(x="Number of clusters", y="Metric") + 
-  theme(text = element_text(size = 15))
+  labs(x="Number of clusters", y="Metric")
 
-ggsave("plots/PCA-fuzzy-metrics.pdf", height = 3, width = 10)
+ggsave("plots/PCA-fuzzy-metrics.pdf", width = 8, height = 3)
 
-PCA_fuzzy_class = PCA_fuzzy_class_matrix[, 3]
+PCA_fuzzy_class = PCA_fuzzy_class_matrix[, 1]
 
-mb_class = PCA_fuzzy_fit[[3]]$membership
+mb_class = PCA_fuzzy_fit[[1]]$membership
 rownames(mb_class) = logitqx$country
 lev = mb_class %>% apply(MARGIN = 1, FUN = max) %>% round(2)
-lapply(1:4, function(g){
+
+lapply(1:2, function(g){
   lev[PCA_fuzzy_class == g]
   
 }) 
+
+PCA_fuzzy_class
+
+data.frame(
+  level = lev, 
+  class = PCA_fuzzy_class,
+  country = names(lev)
+) %>%
+  mutate(level = ifelse(class == 1, level, 1-level)) %>%
+  arrange(desc(level)) %>%
+  mutate(country = factor(country, levels = rev(country))) %>%
+  data.frame() %>%
+  ggplot(aes(y=country, x=level, fill=factor(class))) + 
+  geom_bar(stat="identity") +
+  labs(x="") + 
+  geom_vline(xintercept = 0.5, linetype = "dashed") + 
+  labs(x="Membership level for Cluster 1 (West)", fill="Cluster", y="Country")
+
+ggsave("plots/membership-level.pdf", width = 7, height = 5)
+
 
 qx_fuzzy =  qx_tidy %>%
   as_tibble() %>%
@@ -387,10 +390,16 @@ ex_0 = ex %>%
   dplyr::select(country, year , `0`) %>%
   spread(year, `0`)
 
+ex_0_matrix = ex_0 %>%
+  select(-country) %>%
+  as.matrix()
+
 years = lt$year %>% unique()
-basis = create.bspline.basis(rangeval = period_range, 
-                             nbasis = 25,  
-                             norder = 3)
+basis = create.bspline.basis(
+  rangeval = period_range, 
+  nbasis = 25,  
+  norder = 3
+)
 
 md_fd_obj = smooth.basis(
   argvals = years, 
@@ -399,6 +408,7 @@ md_fd_obj = smooth.basis(
 )
 
 plot(md_fd_obj)
+
 set.seed(1)
 func_kmeans_fit = fit_compare(
   data = t(md_fd_obj$fd$coefs), 
@@ -411,7 +421,7 @@ func_kmeans_fit = fit_compare(
 )
 
 func_kmeans_fit$metrics_plot
-ggsave("plots/func-k-means-metrics.pdf", width = 7, height = 4)
+ggsave("plots/func-k-means-metrics.pdf", width = 8, height = 3)
 
 func_kmeans_class_matrix = func_kmeans_fit$class_matrix
 func_kmeans_class = func_kmeans_class_matrix[, 1]
@@ -428,8 +438,7 @@ ex_0 %>%
 
 ggsave("plots/func-methods-single.pdf", width = 6, height = 3.5) 
 
-
-#### class analysis ####
+#### Rand index ####
 class_matrix_list = list(
   "Hellinger-Ward" = h_ward_class_matrix,
   "ILC-k-means" = ILC_kmeans_class_matrix,
@@ -461,114 +470,62 @@ for(method_1 in methods) {
   }
 }
 
-rand_df
-
 rand_df %>%
   filter(method_1 != method_2) %>%
   filter(G <= 5) %>%
   ggplot(aes(x=G, y=rand, color=method_2)) + 
   geom_point() + 
   geom_line() + 
-  labs(x="Number of clusters", color="Method", y="Adjusted Rand index") + 
+  labs(x="Number of clusters", color="Method", y="Adjusted rand index") + 
   facet_grid(. ~ method_1) + 
   theme(legend.position = "top")
 
 ggsave("plots/rand-index.pdf", width = 7, height = 4)
 
-class_df = data.frame(
+##### graph ####
+selected_class = data.frame(
   country = countries_analyzed, 
-  hell_ward_class,
-  ILC_k_means_class, 
-  PCA_fuzzy_class,
-  func_model_based_class
+  h_ward_class_matrix[, 2],
+  ILC_kmeans_class_matrix[, 1], 
+  PCA_fuzzy_class_matrix[, 1],
+  func_kmeans_class_matrix[, 1]
 )
 
-class_df %>% 
+selected_class %>% 
   xtable::xtable() %>%
   print(include.rownames = F)
 
-match_matrix = matrix(0, n_country, n_country)
-rownames(match_matrix) = colnames(match_matrix) = class_df$country
+class_2 = data.frame(
+  country = countries_analyzed, 
+  h_ward_class_matrix[, 1],
+  ILC_kmeans_class_matrix[, 1], 
+  PCA_fuzzy_class_matrix[, 1],
+  func_kmeans_class_matrix[, 1]
+)
 
-for (i in 1:n_country) {
-  for (j in 1:n_country) {
-    match_matrix[i, j] = sum(class_df[i, -1] == class_df[j, -1])
-  }
-}
+class_3 = data.frame(
+  country = countries_analyzed, 
+  h_ward_class_matrix[, 2],
+  ILC_kmeans_class_matrix[, 2], 
+  PCA_fuzzy_class_matrix[, 2],
+  func_kmeans_class_matrix[, 2]
+)
 
-country_conn = match_matrix %>%
-  as.data.frame() %>%
-  mutate(to = rownames(.)) %>%
-  gather(from, weight, -to) %>%
-  filter(from != to) %>%
-  filter(weight != 0)
+class_4 = data.frame(
+  country = countries_analyzed, 
+  h_ward_class_matrix[, 3],
+  ILC_kmeans_class_matrix[, 3], 
+  PCA_fuzzy_class_matrix[, 3],
+  func_kmeans_class_matrix[, 3]
+)
 
-country_conn$id = NA
-for(i in 1:nrow(country_conn)) {
-  country_conn$id[i] = sort(c(country_conn$from[i], country_conn$to[i])) %>% 
-    str_flatten(collapse = "-")
-}
 
-country_conn = country_conn %>%
-  distinct(id, .keep_all = T) %>%
-  select(-id)
+class_2 %>% plot_graph(seed = 1)
+class_3 %>% plot_graph(seed = 1)
+class_4 %>% plot_graph(seed = 1)
 
-country_graph = graph_from_data_frame(country_conn, directed = FALSE)
-country_tbl_graph = as_tbl_graph(country_graph)
-
-set.seed(3)
-ggraph(country_tbl_graph, layout = "fr") +  # Fruchterman-Reingold layout
-  geom_edge_link(aes(alpha = weight), color = "grey60", show.legend = TRUE) +  
-  geom_node_point() + 
-  geom_node_text(aes(label = name), repel = TRUE, family = "serif") + 
-  scale_edge_alpha(name = "Weight") + 
-  theme_graph()
-
+selected_class %>% plot_graph(seed = 3)
 ggsave("plots/review-country-graph.pdf", width = 5, height = 5)
-
-
-data = beta_x
-diss = dist(beta_x)
-G = 2:10
-n_start = 100
-n_iters = 1000
-method = "kmeans"
-
-
-
-
-
-
-
-clusterCrit::intCriteria(
-  traj = data, 
-  part = z, 
-  crit = c("Tau", "Ratkowsky_Lance", "Ball_Hall")
-)
-
-
-z = class_matrix[, 1]
-fpc_stats = fpc::cluster.stats(d = diss, clustering = z, silhouette = T)
-
-cluster::clusGap()
-fpc_stats[[c("avg.silwidth", "dunn", "avg.silwidth")]]
-clusterSim::index.KL(x = data, clall = class_matrix, centrotypes = "centroids")
-clusterSim::index.H(x = data, clall = class_matrix, centrotypes = "centroids")
-
-
-indices = c(
-  "kl", "ch", "hartigan", "ccc", "scott", 
-  "marriot", "trcovw", "tracew", "friedman", 
-  "rubin", "cindex", "db", "silhouette", "duda", 
-  "pseudot2", "beale", "ratkowsky", "ball", 
-  "ptbiserial", "gap", "frey", "mcclain", "gamma", "gplus", "tau", 
-  "dunn", "hubert", "sdindex", "dindex", "sdbw"
-)
-
-
-
-
-
 
 
 
