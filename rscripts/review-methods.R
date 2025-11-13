@@ -97,9 +97,6 @@ mx_tidy = lt %>% dplyr::select(country, year, age, mx)
 mx = mx_tidy %>% spread(age, mx)
 mx_matrix = mx %>% dplyr::select(-country, -year) %>% as.matrix()
 
-
-WeightedCluster::wcClusterQuality(diss = dH, clustering = h_ward_class)$stats
-
 #### Helling-Ward distance ####
 n = lt$country %>% unique() %>% length()
 time_unique = lt$year %>% unique()
@@ -190,7 +187,7 @@ ILC_k_means_fit$metrics_plot
 ggsave("plots/ILC-kmeans-metrics.pdf", width = 8, height = 3)
 
 ILC_kmeans_class_matrix = ILC_k_means_fit$class_matrix
-ILC_kmeans_class = ILC_kmeans_class_matrix[, 1]
+ILC_kmeans_class = ifelse(ILC_kmeans_class_matrix[, 1] == 1, 2, 1)
 
 beta_x %>%
   as.data.frame() %>%
@@ -323,8 +320,7 @@ metrics %>%
   geom_line() + 
   facet_wrap(. ~ metric, scales = "free") + 
   scale_x_continuous(breaks = 2:10) + 
-  labs(x="Number of clusters", y="Metric") + 
-  theme(text = element_text(size = 15))
+  labs(x="Number of clusters", y="Metric")
 
 ggsave("plots/PCA-fuzzy-metrics.pdf", width = 8, height = 3)
 
