@@ -1,4 +1,4 @@
-# Review: All-Cause Mortality Clustering
+# Review all-cause country-level mortality data
 
 This repository contains code and data for a review and analysis of clustering methods applied to all-cause mortality data.
 
