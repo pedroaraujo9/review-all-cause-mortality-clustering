@@ -15,6 +15,27 @@ library(ggdendro)
 source("rscripts/utils.R")
 select = dplyr::select
 
+paper_year = c(
+  2002, 
+  2006, 
+  2008, 
+  2011, 
+  2013, 
+  2014, 
+  2017, 
+  2018, 
+  2019, 2019, 
+  2020, 
+  2021, 2021, 2021, 2021, 
+  2022, 2022, 2022, 
+  2023, 2023, 2023,
+  2024, 2024, 2024, 2024, 
+  2025, 2025
+)
+
+length(paper_year)
+median(paper_year)
+
 #### data #### 
 lt = readRDS("data/life_tables_5x1.rds")
 lt %>% glimpse()
@@ -124,8 +145,27 @@ colnames(dH) = rownames(dH) = lt$country %>% unique()
 dH = as.dist(dH)
 
 ward_fit = hclust(dH, method = "ward.D")
-ggdendrogram(ward_fit)
-ggsave("plots/dendro.pdf", width = 6, height = 3)
+
+
+dd = dendro_data(ward_fit)
+
+ggplot() +
+  geom_segment(data = dd$segments,
+               aes(x = x, y = y, xend = xend, yend = yend)) +
+  geom_text(
+    data = dd$labels,
+    aes(x = x, y = y - 0.02 * max(dd$segments$y), label = label),
+    hjust = 1, angle = 90
+  ) + 
+  labs(
+    x = "Countries",
+    y = "Height (dissimilarity)",
+  ) +
+  scale_x_continuous(breaks = NULL) + 
+  scale_y_continuous(limits = c(-0.5, 1.01), breaks = c(0, 0.5, 1)) + 
+  theme_minimal() 
+
+ggsave("plots/dendro.pdf", width = 7, height = 4)
 
 h_ward_fit = fit_compare(
   diss = dH, G = 2:10, seed = 1, method = "ward"
@@ -135,7 +175,7 @@ h_ward_fit$metrics_plot
 ggsave("plots/h-ward-metrics.pdf", width = 8, height = 3)
 
 h_ward_class_matrix = h_ward_fit$class_matrix
-h_ward_class = h_ward_class_matrix[, 1]
+h_ward_class = h_ward_class_matrix[, 2]
 
 lt %>%
   mutate(dx_norm = sqrt(dx/100000)) %>%
@@ -151,7 +191,7 @@ lt %>%
   geom_line(linewidth = 1) + 
   geom_ribbon(aes(x=age, ymin = li, ymax=ui, fill=factor(class)), 
               inherit.aes = F, alpha = 0.2) + 
-  labs(x="Age group", y=latex2exp::TeX("Median $d_{x i}^{*}$"), 
+  labs(x="Age group", y=latex2exp::TeX("$d_{x i}^{*}$"), 
        fill = "Cluster", color = "Cluster")
 
 ggsave("plots/dx-curve-cluster.pdf", width = 5, height = 3)
@@ -239,7 +279,7 @@ mx_ilc %>%
   geom_line(alpha = 0.8) + 
   facet_wrap(. ~ age, scales = "free") + 
   #scale_color_viridis() + 
-  labs(x = "Period", y=latex2exp::TeX("Average $\\log({}_{5}m_{x})$"),
+  labs(x = "Period", y=latex2exp::TeX("Average $\\log(m_{x})$"),
        color = "Cluster") + 
   theme(text = element_text(size = 17))
 
