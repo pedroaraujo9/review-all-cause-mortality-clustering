@@ -112,9 +112,19 @@ fit_compare = function(data = NULL,
   }else if(method == "ward") {
     
     ward_fit = hclust(d = diss, method = "ward.D")
+    
     class_matrix = lapply(G, function(g){
       cutree(ward_fit, k = g)
     }) %>% do.call(cbind, .)
+    
+  }else if(method == "complete") {
+    
+    complete_fit = hclust(d = diss, method = "complete")
+    
+    class_matrix = lapply(G, function(g){
+      cutree(complete_fit, k = g)
+    }) %>% do.call(cbind, .)
+    
   }
   
   colnames(class_matrix) = G
@@ -159,7 +169,7 @@ fit_compare = function(data = NULL,
 }
 
 
-plot_graph = function(class_df, seed = 1) {
+plot_graph = function(class_df, seed = 1, show_legend = TRUE) {
   
   match_matrix = matrix(0, n_country, n_country)
   rownames(match_matrix) = colnames(match_matrix) = class_df$country
@@ -193,7 +203,7 @@ plot_graph = function(class_df, seed = 1) {
   
   set.seed(seed)
   ggraph(country_tbl_graph, layout = "fr") +  # Fruchterman-Reingold layout
-    geom_edge_link(aes(alpha = weight), color = "grey60", show.legend = TRUE) +  
+    geom_edge_link(aes(alpha = weight), color = "grey60", show.legend = show_legend) +  
     geom_node_point() + 
     geom_node_text(aes(label = name), repel = TRUE, family = "serif") + 
     scale_edge_alpha(name = "Weight") + 

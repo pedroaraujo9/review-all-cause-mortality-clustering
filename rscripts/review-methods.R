@@ -118,7 +118,7 @@ mx_tidy = lt %>% dplyr::select(country, year, age, mx)
 mx = mx_tidy %>% spread(age, mx)
 mx_matrix = mx %>% dplyr::select(-country, -year) %>% as.matrix()
 
-#### Helling-Ward distance ####
+#### Helling-Complete distance ####
 n = lt$country %>% unique() %>% length()
 time_unique = lt$year %>% unique()
 dH = matrix(0, nrow = n, ncol = n)
@@ -144,7 +144,7 @@ for(i in seq_along(time_unique)) {
 colnames(dH) = rownames(dH) = lt$country %>% unique()
 dH = as.dist(dH)
 
-ward_fit = hclust(dH, method = "ward.D")
+ward_fit = hclust(dH, method = "complete")
 
 
 dd = dendro_data(ward_fit)
@@ -162,26 +162,26 @@ ggplot() +
     y = "Height (dissimilarity)",
   ) +
   scale_x_continuous(breaks = NULL) + 
-  scale_y_continuous(limits = c(-0.5, 1.01), breaks = c(0, 0.5, 1)) + 
+  scale_y_continuous(limits = c(-0.10, 0.25), breaks = c(0.1, 0.25)) + 
   theme_minimal() 
 
 ggsave("plots/dendro.pdf", width = 7, height = 4)
 
-h_ward_fit = fit_compare(
-  diss = dH, G = 2:10, seed = 1, method = "ward"
+h_complete_fit = fit_compare(
+  diss = dH, G = 2:10, seed = 1, method = "complete"
 )
 
-h_ward_fit$metrics_plot
-ggsave("plots/h-ward-metrics.pdf", width = 8, height = 3)
+h_complete_fit$metrics_plot
+ggsave("plots/h-complete-metrics.pdf", width = 8, height = 3)
 
-h_ward_class_matrix = h_ward_fit$class_matrix
-h_ward_class = h_ward_class_matrix[, 2]
+h_complete_class_matrix = h_complete_fit$class_matrix
+h_complete_class = h_complete_class_matrix[, 2]
 
 lt %>%
   mutate(dx_norm = sqrt(dx/100000)) %>%
   select(country, year, age, dx_norm) %>%
   mutate(id = paste0(country, "-", year)) %>%
-  mutate(class = h_ward_class[country]) %>%
+  mutate(class = h_complete_class[country]) %>%
   as_tibble() %>%
   group_by(class, age) %>%
   summarise(med = median(dx_norm),
@@ -480,7 +480,7 @@ ggsave("plots/func-methods-single.pdf", width = 6, height = 3.5)
 
 #### Rand index ####
 class_matrix_list = list(
-  "Hellinger-Ward" = h_ward_class_matrix,
+  "Hellinger-Complete" = h_complete_class_matrix,
   "ILC-k-means" = ILC_kmeans_class_matrix,
   "PCA-fuzzy" = PCA_fuzzy_class_matrix, 
   "func-k-means" = func_kmeans_class_matrix
@@ -525,7 +525,7 @@ ggsave("plots/rand-index.pdf", width = 7, height = 4)
 ##### graph ####
 selected_class = data.frame(
   country = countries_analyzed, 
-  h_ward_class_matrix[, 2],
+  h_complete_class_matrix[, 2],
   ILC_kmeans_class_matrix[, 1], 
   PCA_fuzzy_class_matrix[, 1],
   func_kmeans_class_matrix[, 1]
@@ -537,7 +537,7 @@ selected_class %>%
 
 class_2 = data.frame(
   country = countries_analyzed, 
-  h_ward_class_matrix[, 1],
+  h_complete_class_matrix[, 1],
   ILC_kmeans_class_matrix[, 1], 
   PCA_fuzzy_class_matrix[, 1],
   func_kmeans_class_matrix[, 1]
@@ -545,7 +545,7 @@ class_2 = data.frame(
 
 class_3 = data.frame(
   country = countries_analyzed, 
-  h_ward_class_matrix[, 2],
+  h_complete_class_matrix[, 2],
   ILC_kmeans_class_matrix[, 2], 
   PCA_fuzzy_class_matrix[, 2],
   func_kmeans_class_matrix[, 2]
@@ -553,16 +553,19 @@ class_3 = data.frame(
 
 class_4 = data.frame(
   country = countries_analyzed, 
-  h_ward_class_matrix[, 3],
+  h_complete_class_matrix[, 3],
   ILC_kmeans_class_matrix[, 3], 
   PCA_fuzzy_class_matrix[, 3],
   func_kmeans_class_matrix[, 3]
 )
 
 
-class_2 %>% plot_graph(seed = 1)
-class_3 %>% plot_graph(seed = 1)
-class_4 %>% plot_graph(seed = 1)
+p2 = class_2 %>% plot_graph(seed = 1, show_legend = FALSE) + labs(title = "2 clusters")
+p3 = class_3 %>% plot_graph(seed = 1, show_legend = FALSE) + labs(title = "3 clusters")
+p4 = class_4 %>% plot_graph(seed = 200) + labs(title = "4 clusters")
+
+p2 + p3 + p4
+# plot saved manually on Rstudio
 
 selected_class %>% plot_graph(seed = 3)
 ggsave("plots/review-country-graph.pdf", width = 5, height = 5)
