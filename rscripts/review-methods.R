@@ -56,7 +56,6 @@ lt = lt %>%
                 !(country %in% removed_countries)) 
 
 n_years = lt$year %>% unique() %>% length()
-
 # countries with all periods
 countries_analyzed = lt %>%
   dplyr::select(country, year) %>% 

@@ -169,6 +169,257 @@ fit_compare = function(data = NULL,
 }
 
 
+fit_hell_complete = function(data) {
+  
+  n = data$country %>% unique() %>% length()
+  time_unique = data$year %>% unique()
+  dH = matrix(0, nrow = n, ncol = n)
+  
+  for(i in seq_along(time_unique)) {
+    
+    d_time = data %>%
+      filter(year == time_unique[i]) %>%
+      mutate(dx_norm = dx/100000) %>% #divide by l0 = 100000
+      select(country, age, dx_norm) %>%
+      spread(age, dx_norm) %>%
+      select(-country) %>%
+      as.matrix() %>%
+      sqrt() %>%
+      dist() %>%
+      as.matrix() %>%
+      `/`(sqrt(2))
+    
+    dH = dH + d_time/length(time_unique)
+    
+  }
+  
+  colnames(dH) = rownames(dH) = data$country %>% unique()
+  dH = as.dist(dH)
+  
+  ward_fit = hclust(dH, method = "complete")
+  
+  dd = dendro_data(ward_fit)
+  
+  dendrogram_plot = ggplot() +
+    geom_segment(data = dd$segments,
+                 aes(x = x, y = y, xend = xend, yend = yend)) +
+    geom_text(
+      data = dd$labels,
+      aes(x = x, y = y - 0.02 * max(dd$segments$y), label = label),
+      hjust = 1, angle = 90
+    ) + 
+    labs(
+      x = "Countries",
+      y = "Height (dissimilarity)",
+    ) +
+    scale_x_continuous(breaks = NULL) + 
+    scale_y_continuous(limits = c(-0.10, 0.25), breaks = c(0.1, 0.25)) + 
+    theme_minimal() 
+  
+  h_complete_fit = fit_compare(
+    diss = dH, G = 2:10, seed = 1, method = "complete"
+  )
+  
+  metric_plot = h_complete_fit$metrics_plot
+
+  h_complete_class_matrix = h_complete_fit$class_matrix
+
+  out = list(
+    dendrogram_plot = dendrogram_plot,
+    metric_plot = metric_plot,
+    class_matrix = h_complete_class_matrix
+  )
+  
+  return(out)
+  
+}
+
+fit_ilc_kmeans = function(data) {
+  
+  country_analyzed = data$country %>% unique() %>% as.character()
+  mx_tidy = data %>% dplyr::select(country, year, age, mx)
+  
+  ILC = lapply(countries_analyzed, function(country_name){
+    fit = mx_tidy %>%
+      filter(country == country_name) %>%
+      dplyr::select(year, age, mx) %>%
+      dplyr::arrange(age, year) %>%
+      as_tibble() %>%
+      as_vital(index = year, key = age, .age = "age") %>%
+      model(lee_carter = LC(log(mx), scale = T)) 
+    
+    list(kt = fit %>% time_components() %>% .$kt, 
+         bx = fit %>% age_components() %>% .$bx)
+  })
+  
+  kappa_t = ILC %>% purrr::map(~{.x$kt}) %>% do.call(rbind, .) 
+  beta_x = ILC %>% purrr::map(~{.x$bx}) %>% do.call(rbind, .)
+  
+  ILC_k_means_fit = fit_compare(
+    data = beta_x, 
+    diss = dist(beta_x), 
+    G = 2:10, 
+    n_start = 100, 
+    n_iters = 1000, 
+    method = "kmeans",
+    seed = 1
+  )
+  
+  metric_plot = ILC_k_means_fit$metrics_plot
+  class_matrix = ILC_kmeans_class_matrix = ILC_k_means_fit$class_matrix
+  
+  out = list(
+    metric_plot = metric_plot,
+    class_matrix = class_matrix
+  )
+  
+  return(out)
+  
+}
+
+fit_pca_fuzzy = function(data) {
+  
+  qx_tidy = data %>%
+    dplyr::select(country, year, age, qx) %>%
+    dplyr::filter(age < 110)
+  
+  qx = qx_tidy %>%
+    spread(age, qx)
+  
+  logitqx = qx_tidy %>%
+    as_tibble() %>%
+    mutate(year_age = paste0("v_", year, "_", age)) %>%
+    dplyr::select(country, year_age, qx) %>%
+    mutate(qx = log(qx/(1-qx))) %>%
+    spread(year_age, qx) 
+  
+  qx_matrix = logitqx %>% dplyr::select(-country) %>% as.matrix() %>% scale()
+  dim(qx_matrix)
+  
+  set.seed(1)
+  qx_eigen_dec = qx_matrix %>% cor() %>% eigen()
+  lambda_cumsum = cumsum(qx_eigen_dec$values)/sum((qx_eigen_dec$values))
+  n_dim = length(lambda_cumsum[lambda_cumsum < 0.9]) + 1
+  
+  qxPCS = qx_matrix %*% qx_eigen_dec$vectors[, 1:n_dim]
+  dim(qxPCS)
+  
+  PCA_fuzzy_fit = lapply(2:10, function(g){
+    set.seed(1)
+    cmeans(qxPCS, centers = g, m = 2)
+  })
+  
+  PCA_fuzzy_class_matrix = lapply(PCA_fuzzy_fit, function(fit){
+    fit$cluster
+  }) %>% do.call(cbind, .)
+  
+  # metrics 
+  metrics = lapply(2:10, function(k){
+    
+    fcm_result = PCA_fuzzy_fit[[k-1]]
+    
+    sil = cluster::silhouette(fcm_result$cluster, dist(qxPCS), FUN = mean)
+    avg_sil = mean(sil[, 3])
+    
+    partition_coefficient = sum(fcm_result$membership^2) / nrow(qxPCS)
+    partition_entropy = -sum(fcm_result$membership * log(fcm_result$membership)) / nrow(qxPCS)
+    
+    min_intercluster_dist = min(dist(fcm_result$centers))^2
+    
+    xie_beni = sum(apply(fcm_result$membership^2 * rowSums((qxPCS - fcm_result$centers[fcm_result$cluster, ])^2), 1, sum)) /
+      (nrow(qxPCS) * min_intercluster_dist)
+    
+    global_mean = colMeans(qxPCS)
+    
+    
+    c(
+      "sil" = avg_sil, 
+      "PC" = partition_coefficient,
+      "xie_beni" = xie_beni 
+    )
+    
+  }) %>%
+    do.call(rbind, .) %>%
+    as.data.frame() %>%
+    mutate(K = 2:10)
+  
+  metrics_plot = metrics %>%
+    gather(metric, val, -K) %>%
+    mutate(metric = ifelse(metric == "xie_beni", "Xie-Beni", metric),
+           metric = ifelse(metric == "sil", "Silhouette", metric)) %>%
+    ggplot(aes(x=K, y=val)) + 
+    geom_point() + 
+    geom_line() + 
+    facet_wrap(. ~ metric, scales = "free") + 
+    scale_x_continuous(breaks = 2:10) + 
+    labs(x="Number of clusters", y="Metric")
+  
+
+  class_matrix = PCA_fuzzy_class_matrix
+  
+  out = list(
+    metric_plot = metric_plot,
+    class_matrix = h_complete_class_matrix,
+    PCA_fuzzy_fit = PCA_fuzzy_fit
+  )
+  
+  return(out)
+}
+
+fit_func_kmeans = function(data) {
+  
+  ex_tidy = data %>% dplyr::select(country, year, age, ex)
+  ex = ex_tidy %>% spread(age, ex)
+  
+  ex_0 = ex %>% 
+    dplyr::select(country, year , `0`) %>%
+    spread(year, `0`)
+  
+  ex_0_matrix = ex_0 %>%
+    select(-country) %>%
+    as.matrix()
+  
+  years = lt$year %>% unique()
+  basis = create.bspline.basis(
+    rangeval = period_range, 
+    nbasis = 25,  
+    norder = 3
+  )
+  
+  md_fd_obj = smooth.basis(
+    argvals = years, 
+    y = t(ex_0_matrix), 
+    fdParobj = basis
+  )
+  
+  plot(md_fd_obj)
+  
+  set.seed(1)
+  func_kmeans_fit = fit_compare(
+    data = t(md_fd_obj$fd$coefs), 
+    diss = dist(t(md_fd_obj$fd$coefs)), 
+    G = 2:10, 
+    n_start = 100, 
+    n_iters = 1000, 
+    method = "kmeans", 
+    seed = 1
+  )
+  
+  metrics_plot = func_kmeans_fit$metrics_plot
+  class_matrix = func_kmeans_fit$class_matrix
+  
+  out = list(
+    metric_plot = metric_plot,
+    class_matrix = h_complete_class_matrix,
+    PCA_fuzzy_fit = PCA_fuzzy_fit
+  )
+  
+  return(out)
+  
+}
+
+
+
 plot_graph = function(class_df, seed = 1, show_legend = TRUE) {
   
   match_matrix = matrix(0, n_country, n_country)
