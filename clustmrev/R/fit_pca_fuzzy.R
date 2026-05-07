@@ -34,20 +34,36 @@ fit_pca_fuzzy = function(data) {
     fit$cluster
   }) %>% do.call(cbind, .)
 
+  max_prob = lapply(PCA_fuzzy_fit, function(fit){
+    fit$membership %>% apply(1, max)
+  }) %>% do.call(cbind, .)
+
   # metrics
   metrics = lapply(2:10, function(k){
 
     fcm_result = PCA_fuzzy_fit[[k-1]]
 
-    sil = cluster::silhouette(fcm_result$cluster, dist(qxPCS), FUN = mean)
-    avg_sil = mean(sil[, 3])
+    # Fuzzy silhouette: weight crisp silhouette widths by confidence gap
+    # between the largest and second-largest memberships per observation.
+    sil = cluster::silhouette(fcm_result$cluster, dist(qxPCS))
+    sorted_membership = t(apply(fcm_result$membership, 1, sort, decreasing = TRUE))
+    membership_gap = sorted_membership[, 1] - sorted_membership[, 2]
+    if (sum(membership_gap) > 0) {
+      avg_sil = sum(membership_gap * sil[, 3]) / sum(membership_gap)
+    } else {
+      avg_sil = mean(sil[, 3])
+    }
 
     partition_coefficient = sum(fcm_result$membership^2) / nrow(qxPCS)
     partition_entropy = -sum(fcm_result$membership * log(fcm_result$membership)) / nrow(qxPCS)
 
     min_intercluster_dist = min(dist(fcm_result$centers))^2
 
-    xie_beni = sum(apply(fcm_result$membership^2 * rowSums((qxPCS - fcm_result$centers[fcm_result$cluster, ])^2), 1, sum)) /
+    dist_sq_to_centers = sapply(seq_len(nrow(fcm_result$centers)), function(j) {
+      rowSums((qxPCS - matrix(fcm_result$centers[j, ], nrow = nrow(qxPCS), ncol = ncol(qxPCS), byrow = TRUE))^2)
+    })
+
+    xie_beni = sum((fcm_result$membership^2) * dist_sq_to_centers) /
       (nrow(qxPCS) * min_intercluster_dist)
 
     global_mean = colMeans(qxPCS)
@@ -61,18 +77,18 @@ fit_pca_fuzzy = function(data) {
   }) %>%
     do.call(rbind, .) %>%
     as.data.frame() %>%
-    mutate(K = 2:10)
+    dplyr::mutate(K = 2:10)
 
   metric_plot = metrics %>%
-    gather(metric, val, -K) %>%
-    mutate(metric = ifelse(metric == "xie_beni", "Xie-Beni", metric),
+    tidyr::gather(metric, val, -K) %>%
+    dplyr::mutate(metric = ifelse(metric == "xie_beni", "Xie-Beni", metric),
            metric = ifelse(metric == "sil", "Silhouette", metric)) %>%
-    ggplot(aes(x=K, y=val)) +
-    geom_point() +
-    geom_line() +
-    facet_wrap(. ~ metric, scales = "free") +
-    scale_x_continuous(breaks = 2:10) +
-    labs(x="Number of clusters", y="Metric")
+    ggplot2::ggplot(ggplot2::aes(x=K, y=val)) +
+    ggplot2::geom_point() +
+    ggplot2::geom_line() +
+    ggplot2::facet_wrap(. ~ metric, scales = "free") +
+    ggplot2::scale_x_continuous(breaks = 2:10) +
+    ggplot2::labs(x="Number of clusters", y="Metric")
 
 
   class_matrix = PCA_fuzzy_class_matrix
@@ -80,7 +96,7 @@ fit_pca_fuzzy = function(data) {
   out = list(
     metric_plot = metric_plot,
     class_matrix = class_matrix,
-    fuzzy_fit = PCA_fuzzy_fit
+    max_prob = max_prob
   )
 
   return(out)

@@ -1,17 +1,18 @@
 fit_func_kmeans = function(data) {
 
   ex_tidy = data %>% dplyr::select(country, year, age, ex)
-  ex = ex_tidy %>% spread(age, ex)
+  ex = ex_tidy %>% tidyr::spread(age, ex)
+  period_range = range(data$year)
 
   ex_0 = ex %>%
     dplyr::select(country, year , `0`) %>%
-    spread(year, `0`)
+    tidyr::spread(year, `0`)
 
   ex_0_matrix = ex_0 %>%
-    select(-country) %>%
+    dplyr::select(-country) %>%
     as.matrix()
 
-  years = lt$year %>% unique()
+  years = data$year %>% unique()
   basis = fda::create.bspline.basis(
     rangeval = period_range,
     nbasis = 25,

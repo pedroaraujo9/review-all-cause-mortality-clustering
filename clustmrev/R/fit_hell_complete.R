@@ -7,11 +7,11 @@ fit_hell_complete = function(data) {
   for(i in seq_along(time_unique)) {
 
     d_time = data %>%
-      filter(year == time_unique[i]) %>%
-      mutate(dx_norm = dx/100000) %>%
-      select(country, age, dx_norm) %>%
-      spread(age, dx_norm) %>%
-      select(-country) %>%
+      dplyr::filter(year == time_unique[i]) %>%
+      dplyr::mutate(dx_norm = dx/100000) %>%
+      dplyr::select(country, age, dx_norm) %>%
+      tidyr::spread(age, dx_norm) %>%
+      dplyr::select(-country) %>%
       as.matrix() %>%
       sqrt() %>%
       dist() %>%
@@ -31,19 +31,19 @@ fit_hell_complete = function(data) {
 
   dendrogram_plot = ggplot2::ggplot() +
     ggplot2::geom_segment(data = dd$segments,
-                 aes(x = x, y = y, xend = xend, yend = yend)) +
+                          ggplot2::aes(x = x, y = y, xend = xend, yend = yend)) +
     ggplot2::geom_text(
       data = dd$labels,
-      aes(x = x, y = y - 0.02 * max(dd$segments$y), label = label),
+      ggplot2::aes(x = x, y = y - 0.02 * max(dd$segments$y), label = label),
       hjust = 1, angle = 90
     ) +
     ggplot2::labs(
       x = "Countries",
       y = "Height (dissimilarity)",
     ) +
-    scale_x_continuous(breaks = NULL) +
-    scale_y_continuous(limits = c(-0.10, 0.25), breaks = c(0.1, 0.25)) +
-    theme_minimal()
+    ggplot2::scale_x_continuous(breaks = NULL) +
+    ggplot2::scale_y_continuous(limits = c(-0.10, 0.25), breaks = c(0.1, 0.25)) +
+    ggplot2::theme_minimal()
 
   h_complete_fit = fit_hik(
     diss = dH, G = 2:10, seed = 1, method = "complete"

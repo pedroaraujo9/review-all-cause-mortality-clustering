@@ -52,13 +52,13 @@ fit_hik = function(data = NULL,
   metrics$G = G
 
   metrics_plot = metrics %>%
-    gather(metric, value, -G) %>%
-    ggplot(aes(x=G, y=value)) +
-    geom_point() +
-    geom_line() +
-    facet_wrap(. ~ metric, scales = "free_y") +
-    labs(x="Number of clusters", y="Metric") +
-    scale_x_continuous(breaks = G)
+    tidyr::gather(metric, value, -G) %>%
+    ggplot2::ggplot(ggplot2::aes(x=G, y=value)) +
+    ggplot2::geom_point() +
+    ggplot2::geom_line() +
+    ggplot2::facet_wrap(. ~ metric, scales = "free_y") +
+    ggplot2::labs(x="Number of clusters", y="Metric") +
+    ggplot2::scale_x_continuous(breaks = G)
 
   out = list(
     metrics = metrics,
