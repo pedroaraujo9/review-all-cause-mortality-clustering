@@ -36,7 +36,8 @@ format_data = function(data_path,
   
   lff = lff %>% 
     filter(country %in% countries_full) %>%
-    select(country, year, age, mx, qx, ex, dx)
+    select(country, year, age, mx, qx, ex, dx) %>%
+    arrange(country, year, age)
   
   return(lff)
 
@@ -60,20 +61,6 @@ for(sex in c("male", "female", "both")) {
     }
   }
 }
-
-format_data(
-  data_path = "data/lt_male/mltper_5x1/mltper_5x1.txt", 
-  period_range = c(1960, 2019), 
-  age_range = c(0, 110)
-) %>% saveRDS("data/male_1960_2019_0_110.rds")
-
-format_data(
-  data_path = "data/lt_male/mltper_5x1/mltper_5x1.txt", 
-  period_range = c(1960, 2010), 
-  age_range = c(0, 110)
-) %>% saveRDS("data/male_1960_2015_0_110.rds")
-
-
 
 
 
