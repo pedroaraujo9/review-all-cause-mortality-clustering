@@ -18,7 +18,7 @@ fit_pca_fuzzy = function(data) {
   dim(qx_matrix)
 
   set.seed(1)
-  qx_eigen_dec = qx_matrix %>% cor() %>% eigen()
+  qx_eigen_dec = qx_matrix %>% stats::cor() %>% eigen()
   lambda_cumsum = cumsum(qx_eigen_dec$values)/sum((qx_eigen_dec$values))
   n_dim = length(lambda_cumsum[lambda_cumsum < 0.9]) + 1
 
@@ -45,9 +45,11 @@ fit_pca_fuzzy = function(data) {
 
     # Fuzzy silhouette: weight crisp silhouette widths by confidence gap
     # between the largest and second-largest memberships per observation.
-    sil = cluster::silhouette(fcm_result$cluster, dist(qxPCS))
+
+    sil = cluster::silhouette(fcm_result$cluster, stats::dist(qxPCS))
     sorted_membership = t(apply(fcm_result$membership, 1, sort, decreasing = TRUE))
     membership_gap = sorted_membership[, 1] - sorted_membership[, 2]
+
     if (sum(membership_gap) > 0) {
       avg_sil = sum(membership_gap * sil[, 3]) / sum(membership_gap)
     } else {
@@ -57,7 +59,7 @@ fit_pca_fuzzy = function(data) {
     partition_coefficient = sum(fcm_result$membership^2) / nrow(qxPCS)
     partition_entropy = -sum(fcm_result$membership * log(fcm_result$membership)) / nrow(qxPCS)
 
-    min_intercluster_dist = min(dist(fcm_result$centers))^2
+    min_intercluster_dist = min(stats::dist(fcm_result$centers))^2
 
     dist_sq_to_centers = sapply(seq_len(nrow(fcm_result$centers)), function(j) {
       rowSums((qxPCS - matrix(fcm_result$centers[j, ], nrow = nrow(qxPCS), ncol = ncol(qxPCS), byrow = TRUE))^2)

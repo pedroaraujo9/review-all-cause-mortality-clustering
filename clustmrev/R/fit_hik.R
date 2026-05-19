@@ -11,30 +11,30 @@ fit_hik = function(data = NULL,
   if(method == "kmeans") {
 
     class_matrix = lapply(G, function(g){
-      kmeans(data, centers = g, iter.max = n_iters, nstart = n_start)$cluster
+      stats::kmeans(data, centers = g, iter.max = n_iters, nstart = n_start)$cluster
     }) %>% do.call(cbind, .)
 
   }else if(method == "ward") {
 
-    ward_fit = hclust(d = diss, method = "ward.D")
+    ward_fit = stats::hclust(d = diss, method = "ward.D")
 
     class_matrix = lapply(G, function(g){
-      cutree(ward_fit, k = g)
+      stats::cutree(ward_fit, k = g)
     }) %>% do.call(cbind, .)
 
   }else if(method == "complete") {
 
-    complete_fit = hclust(d = diss, method = "complete")
+    complete_fit = stats::hclust(d = diss, method = "complete")
 
     class_matrix = lapply(G, function(g){
-      cutree(complete_fit, k = g)
+      stats::cutree(complete_fit, k = g)
     }) %>% do.call(cbind, .)
 
   }
 
   colnames(class_matrix) = G
 
-  metrics = lapply(as.character(G), function(g){
+  internal_metrics = lapply(as.character(G), function(g){
 
     quality_stats = WeightedCluster::wcClusterQuality(
       diss = diss, clustering = class_matrix[, g]
@@ -49,9 +49,9 @@ fit_hik = function(data = NULL,
     do.call(rbind, .) %>%
     as.data.frame()
 
-  metrics$G = G
+  internal_metrics$G = G
 
-  metrics_plot = metrics %>%
+  internal_metrics_plot = internal_metrics %>%
     tidyr::gather(metric, value, -G) %>%
     ggplot2::ggplot(ggplot2::aes(x=G, y=value)) +
     ggplot2::geom_point() +
@@ -61,8 +61,8 @@ fit_hik = function(data = NULL,
     ggplot2::scale_x_continuous(breaks = G)
 
   out = list(
-    metrics = metrics,
-    metrics_plot = metrics_plot,
+    internal_metrics = internal_metrics,
+    internal_metrics_plot = internal_metrics_plot,
     class_matrix = class_matrix
   )
 

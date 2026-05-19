@@ -14,7 +14,7 @@ fit_hell_complete = function(data) {
       dplyr::select(-country) %>%
       as.matrix() %>%
       sqrt() %>%
-      dist() %>%
+      stats::dist() %>%
       as.matrix() %>%
       `/`(sqrt(2))
 
@@ -23,9 +23,9 @@ fit_hell_complete = function(data) {
   }
 
   colnames(dH) = rownames(dH) = data$country %>% unique()
-  dH = as.dist(dH)
+  dH = stats::as.dist(dH)
 
-  ward_fit = hclust(dH, method = "complete")
+  ward_fit = stats::hclust(dH, method = "complete")
 
   dd = ggdendro::dendro_data(ward_fit)
 
@@ -49,12 +49,12 @@ fit_hell_complete = function(data) {
     diss = dH, G = 2:10, seed = 1, method = "complete"
   )
 
-  metric_plot = h_complete_fit$metrics_plot
+  internal_metrics_plot = h_complete_fit$internal_metrics_plot
   class_matrix = h_complete_fit$class_matrix
 
   out = list(
     dendrogram_plot = dendrogram_plot,
-    metric_plot = metric_plot,
+    internal_metrics_plot = internal_metrics_plot,
     class_matrix = class_matrix
   )
 

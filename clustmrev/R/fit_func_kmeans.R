@@ -28,7 +28,7 @@ fit_func_kmeans = function(data) {
   set.seed(1)
   func_kmeans_fit = fit_hik(
     data = t(md_fd_obj$fd$coefs),
-    diss = dist(t(md_fd_obj$fd$coefs)),
+    diss = stats::dist(t(md_fd_obj$fd$coefs)),
     G = 2:10,
     n_start = 100,
     n_iters = 1000,
@@ -36,11 +36,11 @@ fit_func_kmeans = function(data) {
     seed = 1
   )
 
-  metric_plot = func_kmeans_fit$metrics_plot
+  internal_metrics_plot = func_kmeans_fit$internal_metrics_plot
   class_matrix = func_kmeans_fit$class_matrix
 
   out = list(
-    metric_plot = metric_plot,
+    internal_metrics_plot = internal_metrics_plot,
     class_matrix = class_matrix
   )
 

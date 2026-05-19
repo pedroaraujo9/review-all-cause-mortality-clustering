@@ -21,7 +21,7 @@ fit_ilc_kmeans = function(data) {
 
   ILC_k_means_fit = fit_hik(
     data = beta_x,
-    diss = dist(beta_x),
+    diss = stats::dist(beta_x),
     G = 2:10,
     n_start = 100,
     n_iters = 1000,
@@ -29,11 +29,11 @@ fit_ilc_kmeans = function(data) {
     seed = 1
   )
 
-  metric_plot = ILC_k_means_fit$metrics_plot
+  internal_metrics_plot = ILC_k_means_fit$internal_metrics_plot
   class_matrix = ILC_k_means_fit$class_matrix
 
   out = list(
-    metric_plot = metric_plot,
+    internal_metrics_plot = internal_metrics_plot,
     class_matrix = class_matrix
   )
 
