@@ -462,3 +462,60 @@ plot_graph = function(class_df, seed = 1, show_legend = TRUE) {
   
 } 
 
+hmd_country_names <- function(x) {
+  
+  country_map <- c(
+    AUS      = "Australia",
+    AUT      = "Austria",
+    BEL      = "Belgium",
+    BGR      = "Bulgaria",
+    BLR      = "Belarus",
+    CAN      = "Canada",
+    CHE      = "Switzerland",
+    CHL      = "Chile",
+    CZE      = "Czechia",
+    DEUTE    = "East Germany",
+    DEUTNP   = "Germany",
+    DEUTW    = "West Germany",
+    DNK      = "Denmark",
+    ESP      = "Spain",
+    EST      = "Estonia",
+    FIN      = "Finland",
+    FRACNP   = "France",
+    FRATNP   = "France Total",
+    GBR_NIR  = "Northern Ireland",
+    GBR_NP   = "United Kingdom",
+    GBR_SCO  = "Scotland",
+    GBRCENW  = "England and Wales Civilian",
+    GBRTENW  = "England and Wales Total",
+    GRC      = "Greece",
+    HKG      = "Hong Kong",
+    HRV      = "Croatia",
+    HUN      = "Hungary",
+    IRL      = "Ireland",
+    ISL      = "Iceland",
+    ISR      = "Israel",
+    ITA      = "Italy",
+    JPN      = "Japan",
+    KOR      = "South Korea",
+    LTU      = "Lithuania",
+    LUX      = "Luxembourg",
+    LVA      = "Latvia",
+    NLD      = "Netherlands",
+    NOR      = "Norway",
+    NZL_MA   = "New Zealand Maori",
+    NZL_NM   = "New Zealand Non-Maori",
+    NZL_NP   = "New Zealand",
+    POL      = "Poland",
+    PRT      = "Portugal",
+    RUS      = "Russia",
+    SVK      = "Slovakia",
+    SVN      = "Slovenia",
+    SWE      = "Sweden",
+    TWN      = "Taiwan",
+    UKR      = "Ukraine",
+    USA      = "United States"
+  )
+  
+  unname(country_map[x])
+}
