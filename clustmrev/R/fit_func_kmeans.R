@@ -37,7 +37,7 @@ fit_func_kmeans = function(data) {
   )
 
   internal_metrics_plot = func_kmeans_fit$internal_metrics_plot
-  class_matrix = func_kmeans_fit$class_matrix
+  class_matrix = cbind(1, func_kmeans_fit$class_matrix)
 
   out = list(
     internal_metrics_plot = internal_metrics_plot,

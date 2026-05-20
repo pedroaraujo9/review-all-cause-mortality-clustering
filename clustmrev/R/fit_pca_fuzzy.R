@@ -15,7 +15,6 @@ fit_pca_fuzzy = function(data) {
     tidyr::spread(year_age, qx)
 
   qx_matrix = logitqx %>% dplyr::select(-country) %>% as.matrix() %>% scale()
-  dim(qx_matrix)
 
   set.seed(1)
   qx_eigen_dec = qx_matrix %>% stats::cor() %>% eigen()
@@ -23,7 +22,6 @@ fit_pca_fuzzy = function(data) {
   n_dim = length(lambda_cumsum[lambda_cumsum < 0.9]) + 1
 
   qxPCS = qx_matrix %*% qx_eigen_dec$vectors[, 1:n_dim]
-  dim(qxPCS)
 
   PCA_fuzzy_fit = lapply(2:10, function(g){
     set.seed(1)
@@ -37,6 +35,12 @@ fit_pca_fuzzy = function(data) {
   max_prob = lapply(PCA_fuzzy_fit, function(fit){
     fit$membership %>% apply(1, max)
   }) %>% do.call(cbind, .)
+
+  membership_level = lapply(PCA_fuzzy_fit, function(fit){
+    fit$membership
+  })
+
+  membership_level = append(list(matrix(1, nrow = nrow(qxPCS), ncol = 1)), membership_level)
 
   # metrics
   metrics = lapply(2:10, function(k){
@@ -81,24 +85,25 @@ fit_pca_fuzzy = function(data) {
     as.data.frame() %>%
     dplyr::mutate(K = 2:10)
 
-  metric_plot = metrics %>%
+  internal_metrics_plot = metrics %>%
     tidyr::gather(metric, val, -K) %>%
     dplyr::mutate(metric = ifelse(metric == "xie_beni", "Xie-Beni", metric),
            metric = ifelse(metric == "sil", "Silhouette", metric)) %>%
+    dplyr::mutate(metric = factor(metric, levels = c("PC", "Xie-Beni", "Silhouette"))) %>%
     ggplot2::ggplot(ggplot2::aes(x=K, y=val)) +
     ggplot2::geom_point() +
     ggplot2::geom_line() +
     ggplot2::facet_wrap(. ~ metric, scales = "free") +
     ggplot2::scale_x_continuous(breaks = 2:10) +
-    ggplot2::labs(x="Number of clusters", y="Metric")
+    ggplot2::labs(x="Number of clusters", y="Metric value")
 
 
-  class_matrix = PCA_fuzzy_class_matrix
+  class_matrix = cbind(1, PCA_fuzzy_class_matrix)
 
   out = list(
-    metric_plot = metric_plot,
+    internal_metrics_plot = internal_metrics_plot,
     class_matrix = class_matrix,
-    max_prob = max_prob
+    membership_level = membership_level
   )
 
   return(out)

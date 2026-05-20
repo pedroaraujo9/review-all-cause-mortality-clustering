@@ -50,7 +50,7 @@ fit_hell_complete = function(data) {
   )
 
   internal_metrics_plot = h_complete_fit$internal_metrics_plot
-  class_matrix = h_complete_fit$class_matrix
+  class_matrix = cbind(1, h_complete_fit$class_matrix)
 
   out = list(
     dendrogram_plot = dendrogram_plot,

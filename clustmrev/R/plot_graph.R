@@ -1,5 +1,14 @@
-plot_graph = function(class_df, seed = 1, show_legend = TRUE) {
+plot_graph = function(review_fit, clust_number, seed = 1, show_legend = TRUE) {
 
+  class_df = data.frame(
+    country = review_fit$data$country %>% unique(),
+    review_fit$review_fit$hell_complete$class_matrix[, clust_number],
+    review_fit$review_fit$ilc_kmeans$class_matrix[, clust_number],
+    review_fit$review_fit$pca_fuzzy$class_matrix[, clust_number],
+    review_fit$review_fit$func_kmeans$class_matrix[, clust_number]
+  )
+
+  n_country = nrow(class_df)
   match_matrix = matrix(0, n_country, n_country)
   rownames(match_matrix) = colnames(match_matrix) = class_df$country
 
@@ -40,3 +49,20 @@ plot_graph = function(class_df, seed = 1, show_legend = TRUE) {
   return(out)
 
 }
+
+plot_clust_graph = function(review_fit, clust_number, seed) {
+
+  plots = lapply(seq_along(clust_number), function(g){
+    plot_graph(
+      review_fit,
+      clust_number = clust_number[g],
+      seed = seed[g],
+      show_legend = ifelse(g == length(clust_number), TRUE, FALSE)
+    ) + ggtitle(paste0(clust_number[g], " clusters"))
+  })
+
+  patchwork::wrap_plots(plots)
+
+}
+
+

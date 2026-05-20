@@ -16,7 +16,6 @@ fit_ilc_kmeans = function(data) {
          bx = fit %>% vital::age_components() %>% .$bx)
   })
 
-  kappa_t = ILC %>% purrr::map(~{.x$kt}) %>% do.call(rbind, .)
   beta_x = ILC %>% purrr::map(~{.x$bx}) %>% do.call(rbind, .)
 
   ILC_k_means_fit = fit_hik(
@@ -30,11 +29,12 @@ fit_ilc_kmeans = function(data) {
   )
 
   internal_metrics_plot = ILC_k_means_fit$internal_metrics_plot
-  class_matrix = ILC_k_means_fit$class_matrix
+  class_matrix = cbind(1, ILC_k_means_fit$class_matrix)
 
   out = list(
     internal_metrics_plot = internal_metrics_plot,
-    class_matrix = class_matrix
+    class_matrix = class_matrix,
+    beta_x = beta_x
   )
 
   return(out)
