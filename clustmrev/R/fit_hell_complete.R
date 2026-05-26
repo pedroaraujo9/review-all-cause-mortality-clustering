@@ -1,3 +1,29 @@
+#' Fit Hellinger distance with complete linkage clustering
+#'
+#' Computes the average Hellinger distance matrix across all years between
+#' countries' death distributions and applies hierarchical clustering with
+#' complete linkage. Internal quality metrics (silhouette, Calinski-Harabasz)
+#' are evaluated for 2 to 10 clusters.
+#'
+#' @param data A data frame containing period life table data for multiple
+#'   countries. Must include columns \code{country}, \code{year}, \code{age},
+#'   and \code{dx}.
+#'
+#' @return A list with the following components:
+#'   \describe{
+#'     \item{\code{dendrogram_plot}}{A \code{ggplot2} dendrogram of the
+#'       complete-linkage hierarchical clustering solution.}
+#'     \item{\code{internal_metrics_plot}}{A \code{ggplot2} plot of internal
+#'       quality metrics (silhouette and Calinski-Harabasz) across 2 to 10
+#'       clusters.}
+#'     \item{\code{class_matrix}}{An integer matrix of cluster assignments,
+#'       with one column per number of clusters (1 to 10) and one row per
+#'       country.}
+#'   }
+#'
+#' @seealso \code{\link{fit_review_methods}}
+#'
+#' @export
 fit_hell_complete = function(data) {
 
   n = data$country %>% unique() %>% length()
@@ -42,7 +68,6 @@ fit_hell_complete = function(data) {
       y = "Height (dissimilarity)",
     ) +
     ggplot2::scale_x_continuous(breaks = NULL) +
-    ggplot2::scale_y_continuous(limits = c(-0.10, 0.25), breaks = c(0.1, 0.25)) +
     ggplot2::theme_minimal()
 
   h_complete_fit = fit_hik(

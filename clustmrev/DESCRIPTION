@@ -1,9 +1,14 @@
 Package: clustmrev
-Title: What the Package Does (One Line, Title Case)
+Title: Reviewing Clustering Methods for All-Cause Mortality
 Version: 0.0.0.9000
 Authors@R: 
-    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"))
-Description: What the package does (one paragraph).
+    person("Pedro", "Menezes de Araujo", , "pedromenezes98@gmail.com", role = c("aut", "cre"))
+Description: Provides implementations of four clustering methods reviewed in
+    the literature for grouping countries by all-cause mortality patterns:
+    Hellinger distance with complete linkage, ILC k-means, PCA-based fuzzy
+    c-means, and functional k-means on life expectancy at birth. Analysis and
+    visualisation functions are included for each method, along with a sample
+    dataset from the Human Mortality Database.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
@@ -23,6 +28,10 @@ Imports:
     ggplot2,
     ggraph,
     igraph,
+    latex2exp,
+    magrittr,
+    mclust,
+    patchwork,
     purrr,
     stringr,
     tibble,

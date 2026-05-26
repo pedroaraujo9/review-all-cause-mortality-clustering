@@ -1,3 +1,28 @@
+#' Fit ILC k-means clustering
+#'
+#' Fits a Lee-Carter model to each country's mortality rates to extract the
+#' age sensitivity vector (\eqn{\beta_x}), then applies k-means clustering on
+#' those vectors. Internal quality metrics are evaluated for 2 to 10 clusters.
+#'
+#' @param data A data frame containing period life table data for multiple
+#'   countries. Must include columns \code{country}, \code{year}, \code{age},
+#'   and \code{mx}.
+#'
+#' @return A list with the following components:
+#'   \describe{
+#'     \item{\code{internal_metrics_plot}}{A \code{ggplot2} plot of internal
+#'       quality metrics (silhouette and Calinski-Harabasz) across 2 to 10
+#'       clusters.}
+#'     \item{\code{class_matrix}}{An integer matrix of cluster assignments,
+#'       with one column per number of clusters (1 to 10) and one row per
+#'       country.}
+#'     \item{\code{beta_x}}{A numeric matrix of estimated \eqn{\beta_x}
+#'       vectors, with one row per country.}
+#'   }
+#'
+#' @seealso \code{\link{fit_review_methods}}
+#'
+#' @export
 fit_ilc_kmeans = function(data) {
 
   countries = data$country %>% unique() %>% as.character()
