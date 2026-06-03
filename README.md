@@ -1,52 +1,60 @@
-# Review all-cause country-level mortality data
+# Review of all-cause mortality clustering methods
 
-This repository contains code and data for a review and analysis of clustering methods applied to all-cause mortality data.
+This repository accompanies the preprint
+[*Clustering methods for all-cause mortality: a review* (arXiv:2512.04831)](https://arxiv.org/abs/2512.04831),
+a review of clustering methods applied to country-level all-cause mortality
+data. It bundles the reviewed methods into an R package (`clustmrev`) and
+provides the scripts and data used to produce the analyses and figures.
 
-## Project Structure
+## The `clustmrev` package
 
-### `data/`
-Contains mortality data used for the analysis:
-- **`life_tables_5x1.rds`**: Life table data at 5-year age intervals and 1-year time periods. This is the primary dataset used for clustering analyses.
+[clustmrev/](clustmrev/) is an R package that implements and applies four
+clustering methods identified in the literature for grouping countries by
+all-cause mortality patterns:
 
-### `plots/`
-Output directory containing all generated visualizations from the analysis, including.
+- **Hellinger distance with complete linkage** — `fit_hell_complete()`
+- **ILC k-means** — `fit_ilc_kmeans()`
+- **PCA-based fuzzy c-means** — `fit_pca_fuzzy()`
+- **Functional k-means on life expectancy at birth** — `fit_func_kmeans()`
 
-### `rscripts/`
-R scripts for data processing and analysis:
+Each method ships with a matching `analyse_*()` function for downstream
+visualisation and diagnostics. `fit_review_methods()` runs all four on a
+common dataset and returns a combined internal-quality-metrics plot, and
+`plot_clust_graph()` visualises cluster structure as a graph. A sample
+dataset (`hmd_data`) of Human Mortality Database period life tables for 30
+countries (1960–2010, ages 0–110 in 5-year groups) is included.
 
-#### `review-methods.R`
-Main analysis script that:
-- Loads and preprocesses life table data
-- Implements and compares multiple clustering methodologies:
-  - K-means clustering (standard and ILC-based)
-  - Functional data clustering
-  - Model-based clustering
-  - Fuzzy clustering
-  - Hierarchical clustering (Ward's method)
-  - PCA-based approaches
-- Generates visualizations for each method
-- Compares clustering results across different distance metrics and approaches
-- Tracks publication years of reviewed methods (median year: 2021)
+### Installation
 
-Key dependencies: `tidyverse`, `NbClust`, `cluster`, `vegan`, `dtw`, `mclust`, `fda`, `vital`, `patchwork`, `ggraph`, `tidygraph`, `igraph`, `e1071`, `ggdendro`
+From the repository root:
 
-#### `utils.R`
-Utility functions supporting the main analysis:
-- **`fit_nb_clust()`**: Wrapper function for the NbClust package that fits clustering models and evaluates optimal cluster numbers using multiple validation indices (30 different indices available including silhouette, gap statistic, Calinski-Harabasz, Davies-Bouldin, etc.)
-- Supports both data matrices and dissimilarity matrices
-- Handles k-means clustering with various distance metrics
-- Includes error handling for robust execution across different indices
+```r
+# install.packages("remotes")
+remotes::install_local("clustmrev")
+```
 
-### `review-all-cause-mortality-clustering.Rproj`
-RStudio project file for managing the workspace and project settings.
+A prebuilt source tarball (`clustmrev_0.0.0.9000.tar.gz`) is also provided.
 
-## Getting Started
+## Repository structure
 
-1. Open the project in RStudio by double-clicking `review-all-cause-mortality-clustering.Rproj`
-2. Ensure all required packages are installed (see dependencies in `review-methods.R`)
-3. Run `rscripts/review-methods.R` to reproduce the analysis
-4. Generated plots will be saved to the `plots/` directory
+- [clustmrev/](clustmrev/) — The `clustmrev` R package (source, data, docs, tests).
+- [data/](data/) — Preprocessed life-table datasets (`.rds`) for different
+  sex, year range, and age range combinations, plus `life_tables_5x1.rds`.
+- [rscripts/](rscripts/) — Analysis scripts:
+  - [process-data.R](rscripts/process-data.R) — builds the datasets in
+    [data/](data/) from the Human Mortality Database.
+  - [review-methods.R](rscripts/review-methods.R) — runs the four reviewed
+    clustering methods via `clustmrev` and produces the figures.
+  - [utils.R](rscripts/utils.R) — helper functions used by the analysis
+    scripts.
+- [plots/](plots/) — Output directory for generated figures.
+- [review-all-cause-mortality-clustering.Rproj](review-all-cause-mortality-clustering.Rproj) —
+  RStudio project file.
 
-## Analysis Overview
+## Getting started
 
-This project reviews and implements various clustering methodologies applied to mortality data, comparing their effectiveness across different countries and time periods. 
+1. Open the project in RStudio via `review-all-cause-mortality-clustering.Rproj`.
+2. Install `clustmrev` (see above) and its dependencies.
+3. Run [rscripts/review-methods.R](rscripts/review-methods.R) to reproduce
+   the analysis; figures are written to [plots/](plots/).
+
