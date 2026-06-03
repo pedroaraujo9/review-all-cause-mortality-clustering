@@ -40,27 +40,30 @@ format_data = function(data_path,
     arrange(country, year, age)
   
   return(lff)
-
+  
 }
 
 
-for(min_year in c(1960, 1990))
-for(sex in c("male", "female", "both")) {
+for(min_year in c(1960, 1990)) {
+  
   for(max_year in c(2010, 2019)) {
-    for(max_age in c(110, 90)) {
+    
+    for(max_age in c(90, 110)) {
       
-      sex_min = substr(sex, 1, 1)
-      data_path = paste0("data/lt_", sex, "/", sex_min, "ltper_5x1/", sex_min, "ltper_5x1.txt")
-      rds_path = paste0(
-        "data/sex=", sex, "-minyear=", min_year, "-maxyear=", max_year, 
-        "-minage=0-", "maxage=", max_age, ".rds"
-      )
-      
-      format_data(
-        data_path = data_path, 
-        period_range = c(min_year, max_year), 
-        age_range = c(0, max_age)
-      ) %>% saveRDS(rds_path)
+      for(sex in c("male", "female", "both")) {
+        sex_min = substr(sex, 1, 1)
+        data_path = paste0("data/lt_", sex, "/", sex_min, "ltper_5x1/", sex_min, "ltper_5x1.txt")
+        rds_path = paste0(
+          "data/sex=", sex, "-minyear=", min_year, "-maxyear=", max_year, 
+          "-minage=0-", "maxage=", max_age, ".rds"
+        )
+        
+        format_data(
+          data_path = data_path, 
+          period_range = c(min_year, max_year), 
+          age_range = c(0, max_age)
+        ) %>% saveRDS(rds_path)
+      }
       
     }
   }
@@ -68,7 +71,14 @@ for(sex in c("male", "female", "both")) {
 
 
 
+ct = format_data(
+  data_path = paste0("data/lt_", "both", "/", "b", "ltper_5x1/", "b", "ltper_5x1.txt"), 
+  period_range = c(1960, 2013), 
+  age_range = c(0, max_age)
+) %>%
+  .$country
 
+c("Russia", "Ukraine", "Belarus") %in% ct
 
 
 
